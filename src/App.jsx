@@ -16,13 +16,13 @@ import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
 // --- FIREBASE INITIALIZATION ---
 // const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
 const firebaseConfig = {
-  apiKey: "AIzaSyDxWzD8YT74vzDeEqS_nlYDx1-sRXfoCrs",
-  authDomain: "solar-forecaster-63320.firebaseapp.com",
-  projectId: "solar-forecaster-63320",
-  storageBucket: "solar-forecaster-63320.firebasestorage.app",
-  messagingSenderId: "721734270047",
-  appId: "1:721734270047:web:329a8b43631d626835efea",
-  measurementId: "G-LXKWMK452T"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
