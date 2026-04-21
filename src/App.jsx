@@ -4,12 +4,16 @@ import {
   ComposedChart, Line, Legend
 } from 'recharts';
 import {
-  Sun, Calendar, Settings, AlertCircle, Info, Target, Calculator, Zap, Cloud
+  Sun, Calendar, Settings, AlertCircle, Info, Target, Calculator, Zap, Cloud,
+  LogOut, LogIn, User
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { 
+  getAuth, signInAnonymously, onAuthStateChanged, 
+  GoogleAuthProvider, signInWithPopup, signOut 
+} from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
 
 // --- FIREBASE INITIALIZATION ---
@@ -105,19 +109,45 @@ export default function App() {
   const capacityWest = (config.westCount * PANEL_WATTAGE) / 1000;
   const totalCapacity = capacityEast + capacityWest;
 
+  // --- AUTH HANDLERS ---
+  const handleLogin = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (err) {
+      console.error("Login Error:", err);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      // Fallback to anonymous after logout if desired, 
+      // or just let onAuthStateChanged handle the state.
+    } catch (err) {
+      console.error("Logout Error:", err);
+    }
+  };
+
   // --- 1. FIREBASE AUTH SETUP ---
   useEffect(() => {
     const initAuth = async () => {
-      try {
-        await signInAnonymously(auth);
-      } catch (err) {
-        console.error("Auth Error:", err);
+      // only sign in anonymously if no one is signed in yet
+      if (!auth.currentUser) {
+        try {
+          await signInAnonymously(auth);
+        } catch (err) {
+          console.error("Auth Error:", err);
+        }
       }
     };
     initAuth();
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+      if (!currentUser) {
+        signInAnonymously(auth).catch(err => console.error("Auto-anon Error:", err));
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -322,22 +352,50 @@ export default function App() {
       <div className="max-w-5xl mx-auto space-y-6">
 
         {/* HEADER */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold text-white flex items-center gap-2">
               Dynamic Solar Forecaster
-              {user && <Cloud className="w-5 h-5 text-emerald-400 ml-2" title="Cloud Sync Active" />}
+              {user && !user.isAnonymous && <Cloud className="w-5 h-5 text-emerald-400 ml-2" title="Cloud Sync Active" />}
             </h1>
             <p className="text-slate-400 text-sm mt-1 flex items-center gap-1">
-              <Info className="w-4 h-4" /> 53.3767°N, -6.3286°W • Settings & history securely stored in cloud
+              <Info className="w-4 h-4" /> 53.3767°N, -6.3286°W • {user?.isAnonymous ? "Anonymous Mode" : "Secure Cloud Storage Active"}
             </p>
           </div>
-          <button
-            onClick={() => setShowConfig(!showConfig)}
-            className="mt-3 md:mt-0 px-4 py-2 bg-[#252630] hover:bg-[#2d2e3a] border border-slate-700 text-slate-300 rounded-lg flex items-center gap-2 transition-colors text-sm font-medium shadow-sm"
-          >
-            <Settings className="w-4 h-4" /> Edit System Parameters
-          </button>
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <button
+              onClick={() => setShowConfig(!showConfig)}
+              className="px-4 py-2 bg-[#252630] hover:bg-[#2d2e3a] border border-slate-700 text-slate-300 rounded-lg flex items-center gap-2 transition-colors text-sm font-medium shadow-sm"
+            >
+              <Settings className="w-4 h-4" /> Parameters
+            </button>
+
+            {user?.isAnonymous ? (
+              <button
+                onClick={handleLogin}
+                className="flex-1 md:flex-none px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center justify-center gap-2 transition-colors text-sm font-medium shadow-md"
+              >
+                <LogIn className="w-4 h-4" /> Sign In
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 bg-[#252630] p-1 pr-3 rounded-full border border-slate-700 shadow-sm">
+                {user?.photoURL ? (
+                  <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full border border-slate-600" />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
+                    <User className="w-4 h-4 text-slate-400" />
+                  </div>
+                )}
+                <button
+                  onClick={handleLogout}
+                  className="text-slate-400 hover:text-white transition-colors"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* CONFIGURATION PANEL (All Inputs mapped to Cloud Sync) */}
