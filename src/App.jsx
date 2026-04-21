@@ -370,7 +370,7 @@ export default function App() {
               <Settings className="w-4 h-4" /> Parameters
             </button>
 
-            {user?.isAnonymous ? (
+            {!user || user.isAnonymous ? (
               <button
                 onClick={handleLogin}
                 className="flex-1 md:flex-none px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center justify-center gap-2 transition-colors text-sm font-medium shadow-md"
