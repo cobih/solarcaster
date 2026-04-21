@@ -9,8 +9,7 @@ import {
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from 'firebase/app';
-import { getAnalytics } from 'firebase/analytics';
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
 
 // --- FIREBASE INITIALIZATION ---
@@ -25,7 +24,6 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -35,6 +33,48 @@ const LATITUDE = 53.3767;
 const LONGITUDE = -6.3286;
 const PANEL_WATTAGE = 465;
 const ALBEDO = 0.2;
+
+// --- SOLAR PHYSICS ENGINE ---
+const getSolarPosition = (date, lat, lon) => {
+  const PI = Math.PI;
+  const rad = PI / 180;
+  const startOfYear = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const diff = date - startOfYear;
+  const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
+  const b = (360 / 365.24) * (dayOfYear - 81) * rad;
+  const equationOfTime = 9.87 * Math.sin(2 * b) - 7.53 * Math.cos(b) - 1.5 * Math.sin(b);
+  const declination = 23.45 * Math.sin(b);
+  const lst = date.getUTCHours() + date.getUTCMinutes() / 60;
+  const solarTime = lst + (4 * lon + equationOfTime) / 60;
+  let hourAngle = 15 * (solarTime - 12);
+  const latRad = lat * rad;
+  const decRad = declination * rad;
+  const haRad = hourAngle * rad;
+  const sinElevation = Math.sin(latRad) * Math.sin(decRad) + Math.cos(latRad) * Math.cos(decRad) * Math.cos(haRad);
+  const elevation = Math.asin(sinElevation);
+  const cosAzimuth = (Math.sin(decRad) - Math.sin(latRad) * sinElevation) / (Math.cos(latRad) * Math.cos(elevation));
+  let safeCosAz = Math.max(-1, Math.min(1, cosAzimuth));
+  let azimuth = Math.acos(safeCosAz);
+  if (hourAngle > 0) azimuth = 2 * PI - azimuth;
+  return { elevation, azimuth, zenith: (PI / 2) - elevation };
+};
+
+const calculateArrayPower = (dni, dhi, temp, solarPos, panelAzimuthDeg, tiltDeg, capacityKw, efficiency) => {
+  if (solarPos.elevation <= 0) return 0;
+  const tiltRad = tiltDeg * (Math.PI / 180);
+  const panelAzRad = panelAzimuthDeg * (Math.PI / 180);
+  const cosAOI = Math.cos(solarPos.zenith) * Math.cos(tiltRad) + Math.sin(solarPos.zenith) * Math.sin(tiltRad) * Math.cos(solarPos.azimuth - panelAzRad);
+  let poaDirect = 0;
+  if (cosAOI > 0) poaDirect = dni * cosAOI;
+  const poaDiffuse = dhi * ((1 + Math.cos(tiltRad)) / 2);
+  const globalHorizontal = dni * Math.max(0, Math.cos(solarPos.zenith)) + dhi;
+  const poaReflected = globalHorizontal * ALBEDO * ((1 - Math.cos(tiltRad)) / 2);
+  const poaTotal = poaDirect + poaDiffuse + poaReflected;
+  const cellTemp = temp + (poaTotal / 800) * (45 - 20);
+  const tempDerating = 1 - Math.max(0, (cellTemp - 25) * 0.004);
+  const power = (poaTotal / 1000) * capacityKw * efficiency * tempDerating;
+  return Math.max(0, power);
+};
 
 export default function App() {
   // --- AUTH & DB STATE ---
@@ -130,48 +170,6 @@ export default function App() {
     }
   };
 
-  // --- SOLAR PHYSICS ENGINE ---
-  const getSolarPosition = (date, lat, lon) => {
-    const PI = Math.PI;
-    const rad = PI / 180;
-    const startOfYear = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-    const diff = date - startOfYear;
-    const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
-    const b = (360 / 365.24) * (dayOfYear - 81) * rad;
-    const equationOfTime = 9.87 * Math.sin(2 * b) - 7.53 * Math.cos(b) - 1.5 * Math.sin(b);
-    const declination = 23.45 * Math.sin(b);
-    const lst = date.getUTCHours() + date.getUTCMinutes() / 60;
-    const solarTime = lst + (4 * lon + equationOfTime) / 60;
-    let hourAngle = 15 * (solarTime - 12);
-    const latRad = lat * rad;
-    const decRad = declination * rad;
-    const haRad = hourAngle * rad;
-    const sinElevation = Math.sin(latRad) * Math.sin(decRad) + Math.cos(latRad) * Math.cos(decRad) * Math.cos(haRad);
-    const elevation = Math.asin(sinElevation);
-    const cosAzimuth = (Math.sin(decRad) - Math.sin(latRad) * sinElevation) / (Math.cos(latRad) * Math.cos(elevation));
-    let safeCosAz = Math.max(-1, Math.min(1, cosAzimuth));
-    let azimuth = Math.acos(safeCosAz);
-    if (hourAngle > 0) azimuth = 2 * PI - azimuth;
-    return { elevation, azimuth, zenith: (PI / 2) - elevation };
-  };
-
-  const calculateArrayPower = (dni, dhi, temp, solarPos, panelAzimuthDeg, tiltDeg, capacityKw) => {
-    if (solarPos.elevation <= 0) return 0;
-    const tiltRad = tiltDeg * (Math.PI / 180);
-    const panelAzRad = panelAzimuthDeg * (Math.PI / 180);
-    const cosAOI = Math.cos(solarPos.zenith) * Math.cos(tiltRad) + Math.sin(solarPos.zenith) * Math.sin(tiltRad) * Math.cos(solarPos.azimuth - panelAzRad);
-    let poaDirect = 0;
-    if (cosAOI > 0) poaDirect = dni * cosAOI;
-    const poaDiffuse = dhi * ((1 + Math.cos(tiltRad)) / 2);
-    const globalHorizontal = dni * Math.max(0, Math.cos(solarPos.zenith)) + dhi;
-    const poaReflected = globalHorizontal * ALBEDO * ((1 - Math.cos(tiltRad)) / 2);
-    const poaTotal = poaDirect + poaDiffuse + poaReflected;
-    const cellTemp = temp + (poaTotal / 800) * (45 - 20);
-    const tempDerating = 1 - Math.max(0, (cellTemp - 25) * 0.004);
-    const power = (poaTotal / 1000) * capacityKw * config.eff * tempDerating;
-    return Math.max(0, power);
-  };
-
   // --- DATA FETCHING ---
   useEffect(() => {
     if (dbSyncing) return; // Wait for initial DB sync before calculating physics
@@ -202,8 +200,8 @@ export default function App() {
           const dhi = hourly.diffuse_radiation[i];
           const solarPos = getSolarPosition(date, LATITUDE, LONGITUDE);
 
-          const eastKw = calculateArrayPower(dni, dhi, temp, solarPos, 90, config.tilt, capacityEast);
-          const westKw = calculateArrayPower(dni, dhi, temp, solarPos, 270, config.tilt, capacityWest);
+          const eastKw = calculateArrayPower(dni, dhi, temp, solarPos, 90, config.tilt, capacityEast, config.eff);
+          const westKw = calculateArrayPower(dni, dhi, temp, solarPos, 270, config.tilt, capacityWest, config.eff);
           const totalKw = eastKw + westKw;
 
           const localTimeLabel = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
