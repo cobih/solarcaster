@@ -156,14 +156,23 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
 
+    // Safety timeout to ensure loading screen clears
+    const timeoutId = setTimeout(() => {
+      setDbSyncing(false);
+    }, 5000);
+
     // Listen to Config updates from Cloud
     const configRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'config');
     const unsubConfig = onSnapshot(configRef, (docSnap) => {
+      clearTimeout(timeoutId);
       if (docSnap.exists()) {
         setConfig(docSnap.data());
       }
       setDbSyncing(false);
-    }, (err) => console.error("Config Sync Error:", err));
+    }, (err) => {
+      console.error("Config Sync Error:", err);
+      setDbSyncing(false); // Proceed even if sync fails
+    });
 
     // Listen to Actuals updates from Cloud
     const actualsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'actuals');
@@ -173,7 +182,11 @@ export default function App() {
       }
     }, (err) => console.error("Actuals Sync Error:", err));
 
-    return () => { unsubConfig(); unsubActuals(); };
+    return () => { 
+      unsubConfig(); 
+      unsubActuals();
+      clearTimeout(timeoutId);
+    };
   }, [user]);
 
   // --- FIRESTORE SAVE HANDLERS ---
