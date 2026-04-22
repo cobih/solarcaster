@@ -14,12 +14,17 @@ import {
   getAuth, onAuthStateChanged, 
   GoogleAuthProvider, signOut,
   signInWithRedirect, getRedirectResult,
+  signInWithPopup,
   setPersistence, browserLocalPersistence
 } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
 
 // --- FIREBASE INITIALIZATION ---
-// const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+// Ensure app is always accessed via firebaseapp.com to prevent iOS cross-origin ITP issues with Google Sign-In
+if (typeof window !== 'undefined' && window.location.hostname === 'solar-forecaster-63320.web.app') {
+  window.location.replace('https://solar-forecaster-63320.firebaseapp.com' + window.location.pathname + window.location.search);
+}
+
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: "solar-forecaster-63320.firebaseapp.com", // Standard domain for OAuth redirects
@@ -120,11 +125,25 @@ export default function App() {
   // --- AUTH HANDLERS ---
   const handleLogin = async () => {
     const provider = new GoogleAuthProvider();
+    setAuthLoading(true);
     try {
-      // signInWithRedirect is much more reliable for PWAs / Standalone mode on iOS
-      await signInWithRedirect(auth, provider);
+      // Popup is generally faster and preferred, but can be blocked or fail on some mobile PWAs
+      await signInWithPopup(auth, provider);
     } catch (err) {
-      console.error("Login Error:", err);
+      console.warn("Popup failed or blocked, falling back to redirect:", err);
+      if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user' || err.code === 'auth/unauthorized-domain') {
+         // Fallback to redirect
+         try {
+           await signInWithRedirect(auth, provider);
+         } catch (redirectErr) {
+           console.error("Redirect failed too:", redirectErr);
+           setAuthError(redirectErr.message);
+           setAuthLoading(false);
+         }
+      } else {
+         setAuthError(err.message);
+         setAuthLoading(false);
+      }
     }
   };
 
