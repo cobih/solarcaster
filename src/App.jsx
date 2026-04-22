@@ -41,7 +41,7 @@ const db = getFirestore(app);
 // Initialize Persistence
 setPersistence(auth, browserLocalPersistence).catch(err => console.error("Persistence Error:", err));
 
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+const appId = "solar-forecaster-63320"; // Hardcoded to match project ID for stability
 
 // --- BASE CONSTANTS ---
 const LATITUDE = 53.3767;
@@ -96,7 +96,9 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
-  const [dbSyncing, setDbSyncing] = useState(false); // Only true when we have a user and are syncing
+  const [dbSyncing, setDbSyncing] = useState(false);
+  const [dbStatus, setDbStatus] = useState("Idle");
+  const [lastSynced, setLastSynced] = useState(null);
 
   // ... rest of state ...
   const [data, setData] = useState([]);
@@ -248,11 +250,16 @@ export default function App() {
   const saveConfigToCloud = async (newConfig) => {
     setConfig(newConfig); // Optimistic UI update
     if (!user) return;
+    setDbStatus("Saving Config...");
     try {
       const configRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'config');
       await setDoc(configRef, newConfig, { merge: true });
+      console.log("Config saved to:", configRef.path);
+      setDbStatus("Config Saved");
+      setLastSynced(new Date().toLocaleTimeString());
     } catch (err) {
       console.error("Failed to save config:", err);
+      setDbStatus("Save Error");
     }
   };
 
@@ -264,12 +271,16 @@ export default function App() {
       console.warn("No user, skipping cloud save");
       return;
     }
+    setDbStatus(`Saving Actual: ${dayLabel}`);
     try {
       const actualsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'actuals');
       await setDoc(actualsRef, { [dayLabel]: value }, { merge: true });
-      console.log("Save successful");
+      console.log("Actuals saved to:", actualsRef.path);
+      setDbStatus("Actual Saved");
+      setLastSynced(new Date().toLocaleTimeString());
     } catch (err) {
       console.error("Failed to save actuals:", err);
+      setDbStatus("Save Error");
     }
   };
 
@@ -863,7 +874,9 @@ export default function App() {
           <p>AppID: {appId}</p>
           <p>API_KEY_LOADED: {firebaseConfig.apiKey ? "Yes" : "NO"}</p>
           <p>Path: /artifacts/{appId}/users/{user?.uid || "???"}/solar_app/</p>
-          <p>Sync Status: {dbSyncing ? (loading ? "Fetching Weather..." : "Cloud Connected") : "Waiting for Auth"}</p>
+          <p>DB Status: <span className="text-indigo-400 font-bold">{dbStatus}</span></p>
+          <p>Last Cloud Sync: {lastSynced || "Never"}</p>
+          <p>Sync State: {dbSyncing ? (loading ? "Fetching Weather..." : "Cloud Connected") : "Waiting for Auth"}</p>
         </div>
 
       </div>
