@@ -132,33 +132,45 @@ export default function App() {
   // --- 1. FIREBASE AUTH SETUP ---
   useEffect(() => {
     const initAuth = async () => {
+      console.log("Initializing Auth...");
       try {
-        // Check if we just returned from a redirect
+        // 1. ALWAYS check for redirect result first
         const result = await getRedirectResult(auth);
         if (result?.user) {
-          // User signed in via redirect
+          console.log("Successfully signed in via redirect:", result.user.email);
+          setUser(result.user);
+          return; // Stop here, we are logged in
+        }
+        
+        console.log("No redirect result found.");
+
+        // 2. Check if a user is already persisted (e.g. from a previous session)
+        if (auth.currentUser) {
+          console.log("Existing user session found:", auth.currentUser.uid);
+          setUser(auth.currentUser);
           return;
         }
 
-        // only sign in anonymously if no one is signed in yet
-        if (!auth.currentUser) {
-          await signInAnonymously(auth);
-        }
+        // 3. Only if NO user exists at all, sign in anonymously
+        console.log("No user found, signing in anonymously...");
+        const anonResult = await signInAnonymously(auth);
+        setUser(anonResult.user);
+        
       } catch (err) {
-        console.error("Auth Error:", err);
-        // Fallback to anonymous on error to ensure app loads
+        console.error("Auth Initialization Error:", err);
+        // Fallback to ensure the app at least loads something
         if (!auth.currentUser) {
-          signInAnonymously(auth).catch(() => {});
+          signInAnonymously(auth).catch(e => console.error("Final fallback failed", e));
         }
       }
     };
     initAuth();
 
+    // Listen for any subsequent state changes (logins, logouts)
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      console.log("Auth State Changed:", currentUser ? (currentUser.isAnonymous ? "Anonymous" : currentUser.email) : "None");
       setUser(currentUser);
-      if (!currentUser) {
-        signInAnonymously(auth).catch(err => console.error("Auto-anon Error:", err));
-      }
+      // We don't auto-sign-in here to avoid loops; initAuth handles the start state
     });
     return () => unsubscribe();
   }, []);
