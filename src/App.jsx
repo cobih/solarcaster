@@ -13,7 +13,8 @@ import { initializeApp } from 'firebase/app';
 import { 
   getAuth, signInAnonymously, onAuthStateChanged, 
   GoogleAuthProvider, signOut,
-  signInWithRedirect, getRedirectResult
+  signInWithRedirect, getRedirectResult,
+  setPersistence, browserLocalPersistence
 } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
 
@@ -21,7 +22,7 @@ import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
 // const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: "solar-forecaster-63320.firebaseapp.com",
+  authDomain: "solar-forecaster-63320.web.app", // Matches hosting domain for better PWA support
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
@@ -31,6 +32,10 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+// Initialize Persistence
+setPersistence(auth, browserLocalPersistence).catch(err => console.error("Persistence Error:", err));
+
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
 // --- BASE CONSTANTS ---
@@ -131,48 +136,49 @@ export default function App() {
 
   // --- 1. FIREBASE AUTH SETUP ---
   useEffect(() => {
-    const initAuth = async () => {
-      console.log("Initializing Auth...");
-      try {
-        // 1. ALWAYS check for redirect result first
-        const result = await getRedirectResult(auth);
-        if (result?.user) {
-          console.log("Successfully signed in via redirect:", result.user.email);
-          setUser(result.user);
-          return; // Stop here, we are logged in
-        }
-        
-        console.log("No redirect result found.");
+    let isMounted = true;
 
-        // 2. Check if a user is already persisted (e.g. from a previous session)
-        if (auth.currentUser) {
-          console.log("Existing user session found:", auth.currentUser.uid);
-          setUser(auth.currentUser);
+    const setupAuth = async () => {
+      console.log("Starting setupAuth...");
+      try {
+        // 1. Always check for redirect result first
+        const result = await getRedirectResult(auth);
+        if (result?.user && isMounted) {
+          console.log("Redirect success:", result.user.email);
+          setUser(result.user);
           return;
         }
-
-        // 3. Only if NO user exists at all, sign in anonymously
-        console.log("No user found, signing in anonymously...");
-        const anonResult = await signInAnonymously(auth);
-        setUser(anonResult.user);
-        
       } catch (err) {
-        console.error("Auth Initialization Error:", err);
-        // Fallback to ensure the app at least loads something
-        if (!auth.currentUser) {
-          signInAnonymously(auth).catch(e => console.error("Final fallback failed", e));
-        }
+        console.error("Redirect check failed:", err);
       }
-    };
-    initAuth();
 
-    // Listen for any subsequent state changes (logins, logouts)
+      // 2. Wait for a moment to let onAuthStateChanged restore session
+      // If after 1.5s we still have no user, trigger anonymous sign-in
+      setTimeout(async () => {
+        if (isMounted && !auth.currentUser) {
+          console.log("No user session found after delay, signing in anonymously...");
+          try {
+            const anon = await signInAnonymously(auth);
+            if (isMounted) setUser(anon.user);
+          } catch (e) {
+            console.error("Anon sign-in failed:", e);
+          }
+        }
+      }, 1500);
+    };
+
+    setupAuth();
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      console.log("Auth State Changed:", currentUser ? (currentUser.isAnonymous ? "Anonymous" : currentUser.email) : "None");
+      if (!isMounted) return;
+      console.log("Auth State Change:", currentUser ? (currentUser.isAnonymous ? "Anon" : currentUser.email) : "Null");
       setUser(currentUser);
-      // We don't auto-sign-in here to avoid loops; initAuth handles the start state
     });
-    return () => unsubscribe();
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   // --- 2. FIRESTORE DATA SYNC ---
@@ -782,6 +788,15 @@ export default function App() {
               </tbody>
             </table>
           </div>
+        </div>
+
+        {/* DEBUG INFO */}
+        <div className="mt-12 p-4 bg-slate-900/50 rounded-lg border border-slate-800 text-[10px] font-mono text-slate-500 overflow-x-auto">
+          <p>Debug Session Info:</p>
+          <p>UID: {user?.uid || "None"}</p>
+          <p>Auth: {user ? (user.isAnonymous ? "Anonymous" : "Google (" + user.email + ")") : "Waiting..."}</p>
+          <p>AppID: {appId}</p>
+          <p>Sync: {dbSyncing ? "Syncing..." : "Ready"}</p>
         </div>
 
       </div>
