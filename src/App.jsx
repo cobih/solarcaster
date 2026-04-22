@@ -189,7 +189,10 @@ export default function App() {
     const actualsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'actuals');
     const unsubActuals = onSnapshot(actualsRef, (docSnap) => {
       if (docSnap.exists()) {
+        console.log("Actuals loaded from cloud:", docSnap.data());
         setActuals(docSnap.data());
+      } else {
+        console.log("No actuals found in cloud");
       }
     }, (err) => console.error("Actuals Sync Error:", err));
 
@@ -213,12 +216,17 @@ export default function App() {
   };
 
   const saveActualToCloud = async (dayLabel, value) => {
+    console.log(`Saving actual for ${dayLabel}: ${value}`);
     const newVal = { ...actuals, [dayLabel]: value };
     setActuals(newVal); // Optimistic UI update
-    if (!user) return;
+    if (!user) {
+      console.warn("No user, skipping cloud save");
+      return;
+    }
     try {
       const actualsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'actuals');
       await setDoc(actualsRef, { [dayLabel]: value }, { merge: true });
+      console.log("Save successful");
     } catch (err) {
       console.error("Failed to save actuals:", err);
     }
@@ -376,6 +384,14 @@ export default function App() {
   }
 
   const canApply = daysEntered > 0 && Math.abs(config.eff - suggestedEff) > 0.001;
+
+  // --- AUTO-CALIBRATION SYNC ---
+  useEffect(() => {
+    if (!dbSyncing && user && canApply && daysEntered >= 3) {
+      console.log("Auto-applying calibration:", suggestedEff);
+      saveConfigToCloud({ ...config, eff: suggestedEff });
+    }
+  }, [suggestedEff, canApply, daysEntered, dbSyncing, user]);
 
   // Hourly Drill-down Data
   const selectedDayData = data.filter(d => d.dayLabel === selectedDayLabel);
