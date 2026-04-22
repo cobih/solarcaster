@@ -139,40 +139,49 @@ export default function App() {
   // --- 1. FIREBASE AUTH SETUP ---
   useEffect(() => {
     let isMounted = true;
+    console.log("Auth Effect Mount. Current User:", auth.currentUser?.email || "None");
 
     const init = async () => {
-      console.log("Initializing Auth...");
       try {
-        // Handle redirect result
+        console.log("Checking getRedirectResult...");
         const result = await getRedirectResult(auth);
         if (result?.user && isMounted) {
-          console.log("Redirect success:", result.user.email);
+          console.log("Redirect success captured:", result.user.email);
           setUser(result.user);
+        } else {
+          console.log("getRedirectResult returned null or no user.");
         }
       } catch (err) {
         console.error("Redirect processing error:", err);
-        setAuthError(err.code + ": " + err.message);
+        setAuthError(err.code + ": " + err.message + " (on " + window.location.hostname + ")");
       }
-      
-      // Let onAuthStateChanged handle the final "truth"
-      setTimeout(() => {
-        if (isMounted) setAuthLoading(false);
-      }, 2500);
     };
 
     init();
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (!isMounted) return;
-      console.log("Auth State:", currentUser ? currentUser.email : "None");
+      console.log("onAuthStateChanged fired:", currentUser ? currentUser.email : "NULL");
       setUser(currentUser);
-      setAuthLoading(false); // Definitely not loading once we get a state
-      if (currentUser) setDbSyncing(true); // Trigger DB sync once we have a user
+      setAuthLoading(false);
+      if (currentUser) {
+        setDbSyncing(true);
+        setAuthError(null); // Clear errors on success
+      }
     });
+
+    // Safety fallback
+    const timer = setTimeout(() => {
+      if (isMounted) {
+        console.log("Auth timer expired. authLoading was:", authLoading);
+        setAuthLoading(false);
+      }
+    }, 4000);
 
     return () => {
       isMounted = false;
       unsubscribe();
+      clearTimeout(timer);
     };
   }, []);
 
@@ -818,13 +827,24 @@ export default function App() {
 
         {/* DEBUG INFO */}
         <div className="mt-12 p-4 bg-slate-900/50 rounded-lg border border-slate-800 text-[10px] font-mono text-slate-500 overflow-x-auto">
-          <p>Debug Session Info:</p>
+          <div className="flex justify-between items-start mb-2 border-b border-slate-800 pb-2">
+            <p className="font-bold text-slate-400">DEBUG SESSION INFO</p>
+            <button 
+              onClick={() => { localStorage.clear(); window.location.href = "/"; }}
+              className="text-indigo-400 hover:text-indigo-300 underline"
+            >
+              Reset Cache & Reload
+            </button>
+          </div>
           <p>UID: {user?.uid || "None"}</p>
-          <p>Auth: {user ? "Google (" + user.email + ")" : "Not Authenticated"}</p>
-          <p>Error: <span className="text-red-400">{authError || "None"}</span></p>
-          <p>URL: {window.location.href}</p>
+          <p>Email: {user?.email || "None"}</p>
+          <p>Provider: {user?.providerData?.[0]?.providerId || "None"}</p>
+          <p>Error: <span className={authError ? "text-red-400" : "text-slate-600"}>{authError || "None"}</span></p>
+          <p>URL: {window.location.hostname}</p>
           <p>AppID: {appId}</p>
-          <p>Sync: {dbSyncing ? "Syncing..." : "Ready"}</p>
+          <p>API_KEY_LOADED: {firebaseConfig.apiKey ? "Yes" : "NO"}</p>
+          <p>Path: /artifacts/{appId}/users/{user?.uid || "???"}/solar_app/</p>
+          <p>Sync Status: {dbSyncing ? (loading ? "Fetching Weather..." : "Cloud Connected") : "Waiting for Auth"}</p>
         </div>
 
       </div>
