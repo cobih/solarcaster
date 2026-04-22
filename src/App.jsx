@@ -12,7 +12,8 @@ import {
 import { initializeApp } from 'firebase/app';
 import { 
   getAuth, signInAnonymously, onAuthStateChanged, 
-  GoogleAuthProvider, signInWithPopup, signOut 
+  GoogleAuthProvider, signOut,
+  signInWithRedirect, getRedirectResult
 } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
 
@@ -113,7 +114,8 @@ export default function App() {
   const handleLogin = async () => {
     const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
+      // signInWithRedirect is much more reliable for PWAs / Standalone mode on iOS
+      await signInWithRedirect(auth, provider);
     } catch (err) {
       console.error("Login Error:", err);
     }
@@ -122,8 +124,6 @@ export default function App() {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      // Fallback to anonymous after logout if desired, 
-      // or just let onAuthStateChanged handle the state.
     } catch (err) {
       console.error("Logout Error:", err);
     }
@@ -132,12 +132,23 @@ export default function App() {
   // --- 1. FIREBASE AUTH SETUP ---
   useEffect(() => {
     const initAuth = async () => {
-      // only sign in anonymously if no one is signed in yet
-      if (!auth.currentUser) {
-        try {
+      try {
+        // Check if we just returned from a redirect
+        const result = await getRedirectResult(auth);
+        if (result?.user) {
+          // User signed in via redirect
+          return;
+        }
+
+        // only sign in anonymously if no one is signed in yet
+        if (!auth.currentUser) {
           await signInAnonymously(auth);
-        } catch (err) {
-          console.error("Auth Error:", err);
+        }
+      } catch (err) {
+        console.error("Auth Error:", err);
+        // Fallback to anonymous on error to ensure app loads
+        if (!auth.currentUser) {
+          signInAnonymously(auth).catch(() => {});
         }
       }
     };
@@ -220,10 +231,17 @@ export default function App() {
     const fetchSolarData = async () => {
       setLoading(true);
       setError(null);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
       try {
         const response = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${LATITUDE}&longitude=${LONGITUDE}&hourly=temperature_2m,direct_normal_irradiance,diffuse_radiation,cloudcover&timezone=GMT&forecast_days=7&past_days=7`
+          `https://api.open-meteo.com/v1/forecast?latitude=${LATITUDE}&longitude=${LONGITUDE}&hourly=temperature_2m,direct_normal_irradiance,diffuse_radiation,cloudcover&timezone=GMT&forecast_days=7&past_days=7`,
+          { signal: controller.signal }
         );
+        clearTimeout(timeoutId);
+
         if (!response.ok) throw new Error("Failed to fetch weather data");
         const json = await response.json();
         const hourly = json.hourly;
@@ -293,7 +311,11 @@ export default function App() {
           return prev;
         });
       } catch (err) {
-        setError(err.message);
+        if (err.name === 'AbortError') {
+          setError("Request timed out. Please check your connection.");
+        } else {
+          setError(err.message);
+        }
       } finally {
         setLoading(false);
       }
