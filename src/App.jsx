@@ -385,24 +385,6 @@ export default function App() {
 
   const canApply = daysEntered > 0 && Math.abs(config.eff - suggestedEff) > 0.001;
 
-  // --- AUTO-CALIBRATION SYNC ---
-  useEffect(() => {
-    // Only auto-apply if we have significant data (3+ days) 
-    // AND it's a significant change (> 1%)
-    // AND we are not currently syncing with DB
-    // AND we haven't already applied this suggested value
-    const significantChange = Math.abs(config.eff - suggestedEff) > 0.01;
-    
-    if (!dbSyncing && user && daysEntered >= 3 && significantChange) {
-      // Use a small delay to ensure state has settled
-      const timer = setTimeout(() => {
-        console.log("Auto-applying calibration:", suggestedEff);
-        saveConfigToCloud({ ...config, eff: suggestedEff });
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [dbSyncing, user, daysEntered > 3, Math.round(suggestedEff * 100)]);
-
   // Hourly Drill-down Data
   const selectedDayData = data.filter(d => d.dayLabel === selectedDayLabel);
   const selectedDaySummary = dailyTotals.find(d => d.dayLabel === selectedDayLabel);
@@ -553,12 +535,15 @@ export default function App() {
 
             <div className="mt-3">
               {canApply ? (
-                <button
-                  onClick={() => saveConfigToCloud({ ...config, eff: suggestedEff })}
-                  className={`w-full py-1.5 text-xs font-bold rounded border transition-colors ${isAccurate ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border-amber-500/30'}`}
-                >
-                  Apply {(suggestedEff * 100).toFixed(1)}% Efficiency
-                </button>
+                <div className="space-y-2">
+                  <p className="text-[10px] text-amber-500 font-medium animate-pulse">Calibration Recommended</p>
+                  <button
+                    onClick={() => saveConfigToCloud({ ...config, eff: suggestedEff })}
+                    className={`w-full py-1.5 text-xs font-bold rounded border transition-colors ${isAccurate ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border-amber-500/30'}`}
+                  >
+                    Apply {(suggestedEff * 100).toFixed(1)}% Efficiency
+                  </button>
+                </div>
               ) : daysEntered > 0 ? (
                 <p className="text-[11px] text-emerald-500 font-medium leading-tight">
                   Model is perfectly tuned!
