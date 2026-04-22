@@ -90,6 +90,7 @@ export default function App() {
   // --- AUTH & DB STATE ---
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState(null);
   const [dbSyncing, setDbSyncing] = useState(false); // Only true when we have a user and are syncing
 
   // ... rest of state ...
@@ -145,18 +146,18 @@ export default function App() {
         // Handle redirect result
         const result = await getRedirectResult(auth);
         if (result?.user && isMounted) {
-          console.log("Redirect sign-in successful:", result.user.email);
+          console.log("Redirect success:", result.user.email);
           setUser(result.user);
         }
       } catch (err) {
         console.error("Redirect processing error:", err);
+        setAuthError(err.code + ": " + err.message);
       }
       
       // Let onAuthStateChanged handle the final "truth"
-      // If after 2s no user has appeared from any source, stop loading
       setTimeout(() => {
         if (isMounted) setAuthLoading(false);
-      }, 2000);
+      }, 2500);
     };
 
     init();
@@ -820,6 +821,8 @@ export default function App() {
           <p>Debug Session Info:</p>
           <p>UID: {user?.uid || "None"}</p>
           <p>Auth: {user ? "Google (" + user.email + ")" : "Not Authenticated"}</p>
+          <p>Error: <span className="text-red-400">{authError || "None"}</span></p>
+          <p>URL: {window.location.href}</p>
           <p>AppID: {appId}</p>
           <p>Sync: {dbSyncing ? "Syncing..." : "Ready"}</p>
         </div>
