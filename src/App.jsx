@@ -11,7 +11,7 @@ import {
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from 'firebase/app';
 import { 
-  getAuth, signInAnonymously, onAuthStateChanged, 
+  getAuth, onAuthStateChanged, 
   GoogleAuthProvider, signOut,
   signInWithRedirect, getRedirectResult,
   setPersistence, browserLocalPersistence
@@ -89,9 +89,10 @@ const calculateArrayPower = (dni, dhi, temp, solarPos, panelAzimuthDeg, tiltDeg,
 export default function App() {
   // --- AUTH & DB STATE ---
   const [user, setUser] = useState(null);
-  const [dbSyncing, setDbSyncing] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [dbSyncing, setDbSyncing] = useState(false); // Only true when we have a user and are syncing
 
-  // --- DATA STATE ---
+  // ... rest of state ...
   const [data, setData] = useState([]);
   const [dailyTotals, setDailyTotals] = useState([]);
   const [nowLabel, setNowLabel] = useState("");
@@ -138,41 +139,34 @@ export default function App() {
   useEffect(() => {
     let isMounted = true;
 
-    const setupAuth = async () => {
-      console.log("Starting setupAuth...");
+    const init = async () => {
+      console.log("Initializing Auth...");
       try {
-        // 1. Always check for redirect result first
+        // Handle redirect result
         const result = await getRedirectResult(auth);
         if (result?.user && isMounted) {
-          console.log("Redirect success:", result.user.email);
+          console.log("Redirect sign-in successful:", result.user.email);
           setUser(result.user);
-          return;
         }
       } catch (err) {
-        console.error("Redirect check failed:", err);
+        console.error("Redirect processing error:", err);
       }
-
-      // 2. Wait for a moment to let onAuthStateChanged restore session
-      // If after 1.5s we still have no user, trigger anonymous sign-in
-      setTimeout(async () => {
-        if (isMounted && !auth.currentUser) {
-          console.log("No user session found after delay, signing in anonymously...");
-          try {
-            const anon = await signInAnonymously(auth);
-            if (isMounted) setUser(anon.user);
-          } catch (e) {
-            console.error("Anon sign-in failed:", e);
-          }
-        }
-      }, 1500);
+      
+      // Let onAuthStateChanged handle the final "truth"
+      // If after 2s no user has appeared from any source, stop loading
+      setTimeout(() => {
+        if (isMounted) setAuthLoading(false);
+      }, 2000);
     };
 
-    setupAuth();
+    init();
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (!isMounted) return;
-      console.log("Auth State Change:", currentUser ? (currentUser.isAnonymous ? "Anon" : currentUser.email) : "Null");
+      console.log("Auth State:", currentUser ? currentUser.email : "None");
       setUser(currentUser);
+      setAuthLoading(false); // Definitely not loading once we get a state
+      if (currentUser) setDbSyncing(true); // Trigger DB sync once we have a user
     });
 
     return () => {
@@ -353,6 +347,46 @@ export default function App() {
   }, [config, capacityEast, capacityWest, dbSyncing]);
 
   // --- UI RENDERING ---
+
+  // 1. App-wide Auth Loading
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-[#1a1b23] text-white">
+        <div className="text-center">
+          <Sun className="w-12 h-12 mx-auto mb-4 text-indigo-500 animate-spin-slow" />
+          <h2 className="text-xl font-semibold">Checking Authentication...</h2>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Login Wall
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#1a1b23] p-6">
+        <div className="max-w-md w-full bg-[#252630] p-8 rounded-2xl border border-slate-700 shadow-2xl text-center">
+          <div className="w-20 h-20 bg-indigo-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Sun className="w-10 h-10 text-indigo-500" />
+          </div>
+          <h1 className="text-3xl font-bold text-white mb-3">Solarcaster</h1>
+          <p className="text-slate-400 mb-8 leading-relaxed">
+            Dynamic solar forecasting with cloud persistence and model auto-calibration.
+          </p>
+          <button
+            onClick={handleLogin}
+            className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center justify-center gap-3 transition-all font-bold text-lg shadow-lg hover:shadow-indigo-500/20"
+          >
+            <LogIn className="w-6 h-6" /> Sign in with Google
+          </button>
+          <p className="text-xs text-slate-500 mt-6">
+            Permanent accounts ensure your history and array settings persist across all devices.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. Data Fetching / Syncing
   if ((loading || dbSyncing) && data.length === 0) {
     return (
       <div className="flex items-center justify-center h-screen bg-[#1a1b23] text-white">
@@ -417,10 +451,10 @@ export default function App() {
           <div>
             <h1 className="text-2xl font-bold text-white flex items-center gap-2">
               Dynamic Solar Forecaster
-              {user && !user.isAnonymous && <Cloud className="w-5 h-5 text-emerald-400 ml-2" title="Cloud Sync Active" />}
+              <Cloud className="w-5 h-5 text-emerald-400 ml-2" title="Cloud Sync Active" />
             </h1>
             <p className="text-slate-400 text-sm mt-1 flex items-center gap-1">
-              <Info className="w-4 h-4" /> 53.3767°N, -6.3286°W • {user?.isAnonymous ? "Anonymous Mode" : "Secure Cloud Storage Active"}
+              <Info className="w-4 h-4" /> 53.3767°N, -6.3286°W • Connected as {user.email}
             </p>
           </div>
           <div className="flex items-center gap-3 w-full md:w-auto">
@@ -431,31 +465,22 @@ export default function App() {
               <Settings className="w-4 h-4" /> Parameters
             </button>
 
-            {!user || user.isAnonymous ? (
+            <div className="flex items-center gap-2 bg-[#252630] p-1 pr-3 rounded-full border border-slate-700 shadow-sm">
+              {user.photoURL ? (
+                <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full border border-slate-600" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
+                  <User className="w-4 h-4 text-slate-400" />
+                </div>
+              )}
               <button
-                onClick={handleLogin}
-                className="flex-1 md:flex-none px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center justify-center gap-2 transition-colors text-sm font-medium shadow-md"
+                onClick={handleLogout}
+                className="text-slate-400 hover:text-white transition-colors"
+                title="Sign Out"
               >
-                <LogIn className="w-4 h-4" /> Sign In
+                <LogOut className="w-4 h-4" />
               </button>
-            ) : (
-              <div className="flex items-center gap-2 bg-[#252630] p-1 pr-3 rounded-full border border-slate-700 shadow-sm">
-                {user?.photoURL ? (
-                  <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full border border-slate-600" />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
-                    <User className="w-4 h-4 text-slate-400" />
-                  </div>
-                )}
-                <button
-                  onClick={handleLogout}
-                  className="text-slate-400 hover:text-white transition-colors"
-                  title="Sign Out"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
-              </div>
-            )}
+            </div>
           </div>
         </div>
 
@@ -794,7 +819,7 @@ export default function App() {
         <div className="mt-12 p-4 bg-slate-900/50 rounded-lg border border-slate-800 text-[10px] font-mono text-slate-500 overflow-x-auto">
           <p>Debug Session Info:</p>
           <p>UID: {user?.uid || "None"}</p>
-          <p>Auth: {user ? (user.isAnonymous ? "Anonymous" : "Google (" + user.email + ")") : "Waiting..."}</p>
+          <p>Auth: {user ? "Google (" + user.email + ")" : "Not Authenticated"}</p>
           <p>AppID: {appId}</p>
           <p>Sync: {dbSyncing ? "Syncing..." : "Ready"}</p>
         </div>
