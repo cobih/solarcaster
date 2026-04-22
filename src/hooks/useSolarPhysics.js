@@ -111,6 +111,7 @@ export const useSolarPhysics = (config, dbSyncing) => {
             east: Number(eastKw.toFixed(2)),
             west: Number(westKw.toFixed(2)),
             total: Number(totalKw.toFixed(2)),
+            cloudCover: hourly.cloudcover[i], // Extract cloud cover %
           });
 
           const itemMidnight = new Date(date.getFullYear(), date.getMonth(), date.getDate());

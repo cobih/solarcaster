@@ -243,9 +243,47 @@ export default function App() {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
                 <XAxis dataKey="fullLabel" tickFormatter={(val) => val.split(' ')[0]} interval={23} stroke="#64748b" fontSize={11} tickMargin={10} axisLine={false} tickLine={false} />
-                <YAxis stroke="#64748b" fontSize={11} domain={[0, Math.ceil(maxKw)]} axisLine={false} tickLine={false} tickMargin={10} />
-                <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc' }} itemStyle={{ color: '#fde047', fontWeight: 'bold' }} labelStyle={{ color: '#94a3b8', marginBottom: '4px' }} />
-                <Area type="monotone" dataKey="total" name="Model Generation" stroke="#fde047" fill="url(#colorYellow)" strokeWidth={2} />
+                <YAxis
+                  stroke="#64748b"
+                  fontSize={11}
+                  domain={[0, Math.ceil(maxKw)]}
+                  axisLine={false}
+                  tickLine={false}
+                  tickMargin={10}
+                />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  stroke="#475569"
+                  fontSize={10}
+                  domain={[0, 100]}
+                  axisLine={false}
+                  tickLine={false}
+                  unit="%"
+                  hide={true} // Keep it subtle, just use the data
+                />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc' }}
+                  itemStyle={{ color: '#fde047', fontWeight: 'bold' }}
+                  labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
+                />
+                <Area
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="cloudCover"
+                  name="Cloud Cover"
+                  stroke="none"
+                  fill="#475569"
+                  fillOpacity={0.15}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="total"
+                  name="Model Generation"
+                  stroke="#fde047"
+                  fill="url(#colorYellow)"
+                  strokeWidth={2}
+                />
                 {nowLabel && <ReferenceLine x={nowLabel} stroke="#818cf8" strokeDasharray="4 4" label={{ position: 'insideTopLeft', value: 'CURRENT TIME', fill: '#818cf8', fontSize: 10, fontWeight: 600 }} />}
               </AreaChart>
             </ResponsiveContainer>
@@ -262,8 +300,10 @@ export default function App() {
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
                   <XAxis dataKey="timeLabel" interval={3} stroke="#64748b" fontSize={11} tickMargin={10} axisLine={false} tickLine={false} />
                   <YAxis stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} tickMargin={10} />
+                  <YAxis yAxisId="right" orientation="right" hide={true} domain={[0, 100]} />
                   <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc' }} itemStyle={{ fontWeight: 'bold' }} labelStyle={{ color: '#94a3b8', marginBottom: '4px' }} />
                   <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px', color: '#cbd5e1' }} />
+                  <Area yAxisId="right" type="monotone" dataKey="cloudCover" name="Cloud Cover (%)" stroke="none" fill="#475569" fillOpacity={0.1} />
                   <Area type="monotone" dataKey="total" name="Total" stroke="#fde047" fill="#fde047" fillOpacity={0.1} strokeWidth={2} />
                   <Line type="monotone" dataKey="east" name="East" stroke="#f59e0b" strokeWidth={2} dot={false} />
                   <Line type="monotone" dataKey="west" name="West" stroke="#ef4444" strokeWidth={2} dot={false} />
