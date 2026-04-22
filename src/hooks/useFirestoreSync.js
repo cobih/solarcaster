@@ -8,10 +8,11 @@ export const useFirestoreSync = (user, appId) => {
   const [lastSynced, setLastSynced] = useState(null);
 
   const [config, setConfig] = useState({
-    tilt: 35,
     eff: 0.85,
-    eastCount: 11,
-    westCount: 9,
+    strings: [
+      { id: 's1', name: "East String", azimuth: 90, tilt: 35, count: 11 },
+      { id: 's2', name: "West String", azimuth: 270, tilt: 35, count: 9 }
+    ],
   });
 
   const [actuals, setActuals] = useState({});
@@ -25,7 +26,6 @@ export const useFirestoreSync = (user, appId) => {
       return;
     }
 
-    // Use a small delay for status update to avoid synchronous setState lint error
     const statusTimer = setTimeout(() => setDbStatus("Connecting..."), 0);
     const timeoutId = setTimeout(() => setDbSyncing(false), 5000);
 
@@ -33,7 +33,21 @@ export const useFirestoreSync = (user, appId) => {
     const unsubConfig = onSnapshot(configRef, (docSnap) => {
       clearTimeout(timeoutId);
       if (docSnap.exists()) {
-        setConfig(docSnap.data());
+        const data = docSnap.data();
+        // Migration logic: If old flat config exists, convert it to the new multi-string format
+        if (!data.strings && data.eastCount !== undefined) {
+          console.log("Migrating legacy config to multi-string...");
+          const migrated = {
+            eff: data.eff || 0.85,
+            strings: [
+              { id: 's1', name: "East String", azimuth: 90, tilt: data.tilt || 35, count: data.eastCount || 0 },
+              { id: 's2', name: "West String", azimuth: 270, tilt: data.tilt || 35, count: data.westCount || 0 }
+            ]
+          };
+          setConfig(migrated);
+        } else {
+          setConfig(data);
+        }
       }
       setDbSyncing(false);
     }, (err) => {

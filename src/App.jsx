@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import {
   Sun, Calendar, Settings, AlertCircle, Info, Target, Calculator, Zap, Cloud,
-  LogOut, LogIn, User
+  LogOut, LogIn, User, Plus, Trash2
 } from 'lucide-react';
 
 import { useSolarAuth } from './hooks/useSolarAuth';
@@ -64,6 +64,31 @@ export default function App() {
   const selectedDayData = data.filter(d => d.dayLabel === selectedDayLabel);
   const selectedDaySummary = dailyTotals.find(d => d.dayLabel === selectedDayLabel);
   const currentHourTick = nowLabel && nowLabel.startsWith(selectedDayLabel) ? nowLabel.replace(selectedDayLabel + ' ', '') : null;
+
+  // String Colors for Charts
+  const STRING_COLORS = ['#f59e0b', '#ef4444', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'];
+
+  // --- STRING MANAGEMENT ---
+  const addString = () => {
+    const newString = {
+      id: 's' + Date.now(),
+      name: `String ${config.strings.length + 1}`,
+      azimuth: 180,
+      tilt: 35,
+      count: 10
+    };
+    saveConfigToCloud({ ...config, strings: [...config.strings, newString] });
+  };
+
+  const removeString = (id) => {
+    if (config.strings.length <= 1) return; // Keep at least one
+    saveConfigToCloud({ ...config, strings: config.strings.filter(s => s.id !== id) });
+  };
+
+  const updateString = (id, field, value) => {
+    const updated = config.strings.map(s => s.id === id ? { ...s, [field]: value } : s);
+    saveConfigToCloud({ ...config, strings: updated });
+  };
 
   // --- UI RENDERING ---
 
@@ -150,47 +175,79 @@ export default function App() {
 
         {/* CONFIG PANEL */}
         {showConfig && (
-          <div className="bg-[#252630] p-5 rounded-xl border border-slate-700 shadow-lg animate-in fade-in slide-in-from-top-4">
-            <h3 className="font-semibold text-white mb-4 text-sm flex items-center gap-2"><Calculator className="w-4 h-4 text-amber-400" /> Physical Array Settings</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Tilt Angle (°)</label>
-                <input type="number" value={config.tilt} onChange={e => saveConfigToCloud({ ...config, tilt: Number(e.target.value) })}
-                  className="w-full p-2.5 bg-[#1a1b23] border border-slate-600 rounded-lg text-white font-mono outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-all" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">System Efficiency (%)</label>
-                <input type="number" value={config.eff * 100} onChange={e => saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 })}
-                  className="w-full p-2.5 bg-[#1a1b23] border border-slate-600 rounded-lg text-white font-mono outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-all" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">East Panels</label>
-                <input type="number" value={config.eastCount} onChange={e => saveConfigToCloud({ ...config, eastCount: Number(e.target.value) })}
-                  className="w-full p-2.5 bg-[#1a1b23] border border-slate-600 rounded-lg text-white font-mono outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-all" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">West Panels</label>
-                <input type="number" value={config.westCount} onChange={e => saveConfigToCloud({ ...config, westCount: Number(e.target.value) })}
-                  className="w-full p-2.5 bg-[#1a1b23] border border-slate-600 rounded-lg text-white font-mono outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-all" />
+          <div className="bg-[#252630] p-5 rounded-xl border border-slate-700 shadow-lg animate-in fade-in slide-in-from-top-4 space-y-6">
+            <div className="flex justify-between items-center border-b border-slate-700 pb-4">
+              <h3 className="font-semibold text-white text-sm flex items-center gap-2"><Calculator className="w-4 h-4 text-amber-400" /> System Configuration</h3>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                   <label className="text-[10px] text-slate-400 uppercase font-bold">System Efficiency</label>
+                   <input type="number" value={config.eff * 100} onChange={e => saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 })}
+                    className="w-16 p-1 bg-[#1a1b23] border border-slate-600 rounded text-white text-xs font-mono" />
+                   <span className="text-xs text-slate-500">%</span>
+                </div>
+                <button onClick={addString} className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold flex items-center gap-1 transition-colors">
+                  <Plus className="w-3 h-3" /> Add String
+                </button>
               </div>
             </div>
-            <div className="mt-4 pt-4 border-t border-slate-700/50 flex justify-between items-center text-xs text-slate-400">
-              <p>Total Calculated Capacity: <strong className="text-white text-sm">{totalCapacity.toFixed(2)} kWp</strong></p>
-              <p>Changes autosave to the cloud.</p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {(config.strings || []).map((s, idx) => (
+                <div key={s.id} className="p-4 bg-[#1a1b23] rounded-lg border border-slate-700 relative group">
+                  <button onClick={() => removeString(s.id)} className="absolute top-2 right-2 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2">
+                      <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">String Name</label>
+                      <input type="text" value={s.name} onChange={e => updateString(s.id, 'name', e.target.value)}
+                        className="w-full bg-transparent border-b border-slate-700 focus:border-indigo-500 outline-none text-sm text-white py-1" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Panels (465W)</label>
+                      <input type="number" value={s.count} onChange={e => updateString(s.id, 'count', Number(e.target.value))}
+                        className="w-full bg-[#252630] border border-slate-700 rounded px-2 py-1 text-sm text-white outline-none focus:border-indigo-500" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Azimuth (°)</label>
+                      <input type="number" value={s.azimuth} onChange={e => updateString(s.id, 'azimuth', Number(e.target.value))}
+                        className="w-full bg-[#252630] border border-slate-700 rounded px-2 py-1 text-sm text-white outline-none focus:border-indigo-500" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Tilt (°)</label>
+                      <input type="number" value={s.tilt} onChange={e => updateString(s.id, 'tilt', Number(e.target.value))}
+                        className="w-full bg-[#252630] border border-slate-700 rounded px-2 py-1 text-sm text-white outline-none focus:border-indigo-500" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-4 border-t border-slate-700/50 flex justify-between items-center text-xs text-slate-400">
+              <p>Total Capacity: <strong className="text-white text-sm">{totalCapacity.toFixed(2)} kWp</strong></p>
+              <p>Autosaves to cloud.</p>
             </div>
           </div>
         )}
 
         {/* METRICS */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {/* Card 1: Today Model Output */}
           <div className="bg-[#252630] p-5 rounded-xl border border-slate-700/50 shadow-sm flex flex-col justify-between">
-            <div>
-              <p className="text-slate-400 text-sm font-medium mb-1">Model Forecast Today</p>
-              <div className="flex items-end gap-2"><h2 className="text-3xl font-bold text-white">{todayForecast.yield.toFixed(1)}</h2><span className="text-slate-500 mb-1 font-medium">kWh</span></div>
-            </div>
-            <div className="mt-4 flex items-center gap-2 text-xs text-slate-400"><Sun className="w-4 h-4 text-amber-400" /> E: {todayForecast.eastYield.toFixed(1)} / W: {todayForecast.westYield.toFixed(1)}</div>
+          <div>
+            <p className="text-slate-400 text-sm font-medium mb-1">Model Forecast Today</p>
+            <div className="flex items-end gap-2"><h2 className="text-3xl font-bold text-white">{todayForecast.yield.toFixed(1)}</h2><span className="text-slate-500 mb-1 font-medium">kWh</span></div>
           </div>
-
+          <div className="mt-4 space-y-1">
+            {(config.strings || []).map((s, idx) => (
+              <div key={s.id} className="flex items-center gap-2 text-[10px] text-slate-500">
+                <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: STRING_COLORS[idx % STRING_COLORS.length] }}></div>
+                <span className="truncate flex-1">{s.name}:</span>
+                <span className="font-mono text-slate-400">{(todayForecast.strings?.[s.id] || 0).toFixed(1)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
           <div className="bg-gradient-to-br from-[#1e293b] to-[#0f172a] p-5 rounded-xl border border-indigo-500/30 shadow-sm flex flex-col justify-between">
             <div>
               <label className="text-indigo-300 text-sm font-medium mb-1 flex items-center gap-2"><Zap className="w-4 h-4" /> Today's Inverter Actual</label>
@@ -312,6 +369,32 @@ export default function App() {
                       if (name === "Cloud Cover (%)") return [`${value}%`, name];
                       return [`${value} kW`, name];
                     }}
+                    content={({ active, payload, label }) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="bg-[#1e293b] border border-slate-700 p-3 rounded-lg shadow-xl text-xs space-y-2">
+                            <p className="font-bold text-slate-400 mb-1">{label}</p>
+                            <div className="space-y-1">
+                              {payload.map((entry, idx) => {
+                                // Only show total and cumulative with high prominence
+                                const isTotal = entry.dataKey === 'total';
+                                const isCum = entry.dataKey === 'cumulativeYield';
+                                return (
+                                  <div key={idx} className={`flex items-center justify-between gap-4 ${isTotal || isCum ? 'pt-1 border-t border-slate-800 font-bold' : ''}`}>
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }}></div>
+                                      <span className="text-slate-300">{entry.name}:</span>
+                                    </div>
+                                    <span className="text-white font-mono">{entry.value} {entry.dataKey === 'cumulativeYield' ? 'kWh' : 'kW'}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
                   />
                   <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px', color: '#cbd5e1' }} />
                   
@@ -320,8 +403,20 @@ export default function App() {
                   
                   {/* Power Generation (Spot) */}
                   <Area type="monotone" dataKey="total" name="Total Power (kW)" stroke="#fde047" fill="#fde047" fillOpacity={0.1} strokeWidth={2} />
-                  <Line type="monotone" dataKey="east" name="East (kW)" stroke="#f59e0b" strokeWidth={1} dot={false} strokeDasharray="5 5" />
-                  <Line type="monotone" dataKey="west" name="West (kW)" stroke="#ef4444" strokeWidth={1} dot={false} strokeDasharray="5 5" />
+                  
+                  {/* Dynamic Individual String Curves */}
+                  {(config.strings || []).map((s, idx) => (
+                    <Line 
+                      key={s.id}
+                      type="monotone" 
+                      dataKey={`stringPowers.${s.id}`} 
+                      name={`${s.name} (kW)`} 
+                      stroke={STRING_COLORS[idx % STRING_COLORS.length]} 
+                      strokeWidth={1.5} 
+                      dot={false} 
+                      strokeDasharray="5 5" 
+                    />
+                  ))}
 
                   {/* Cumulative Yield (The goal) */}
                   <Line 
@@ -346,32 +441,42 @@ export default function App() {
           <div className="p-5 border-b border-slate-700/50 flex justify-between items-center bg-[#1e293b]/50">
             <h2 className="text-lg font-semibold text-white">Daily Calculation Breakdown</h2>
           </div>
-          <div className="overflow-x-auto max-h-[350px] overflow-y-auto">
+          <div className="overflow-x-auto max-h-[450px] overflow-y-auto">
             <table className="w-full text-left text-sm">
               <thead className="sticky top-0 bg-[#252630] z-10 border-b border-slate-700">
                 <tr className="text-slate-400 uppercase text-[11px] font-semibold">
                   <th className="p-4">Date</th>
                   <th className="p-4">Timeframe</th>
-                  <th className="p-4">East</th>
-                  <th className="p-4">West</th>
-                  <th className="p-4">Actual</th>
-                  <th className="p-4 text-white">Model</th>
+                  {(config.strings || []).map(s => (
+                    <th key={s.id} className="p-4">{s.name}</th>
+                  ))}
+                  <th className="p-4 text-white">Model (kWh)</th>
+                  <th className="p-4 text-indigo-300">Actual (kWh)</th>
                 </tr>
               </thead>
               <tbody className="text-slate-300 divide-y divide-slate-700/50">
                 {dailyTotals.map((day, i) => (
                   <tr key={i} onClick={() => setSelectedDayLabel(day.dayLabel)} className={`hover:bg-[#2d2e3a] cursor-pointer ${selectedDayLabel === day.dayLabel ? 'bg-indigo-900/40 border-l-2 border-indigo-400' : ''}`}>
                     <td className="p-4">{day.date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</td>
-                    <td className="p-4">{day.dayOffset < 0 ? "PAST" : day.dayOffset === 0 ? "TODAY" : "FORECAST"}</td>
-                    <td className="p-4">{day.eastYield.toFixed(1)}</td>
-                    <td className="p-4">{day.westYield.toFixed(1)}</td>
+                    <td className="p-4">
+                      {day.dayOffset < 0 ? (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-500">PAST</span>
+                      ) : day.dayOffset === 0 ? (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400">TODAY</span>
+                      ) : (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500">FCST</span>
+                      )}
+                    </td>
+                    {(config.strings || []).map(s => (
+                      <td key={s.id} className="p-4 text-slate-500 font-mono text-xs">{(day.strings?.[s.id] || 0).toFixed(1)}</td>
+                    ))}
+                    <td className="p-4 font-bold text-white">{(day.yield || 0).toFixed(2)}</td>
                     <td className="p-4" onClick={e => e.stopPropagation()}>
                       {day.dayOffset <= 0 ? (
                         <input type="number" value={actuals[day.dayLabel] || ''} onChange={e => saveActualToCloud(day.dayLabel, e.target.value)}
-                          className="w-20 bg-[#1a1b23] border border-slate-600 rounded px-2 py-1 text-white text-xs outline-none focus:border-indigo-500" />
-                      ) : "---"}
+                          className="w-20 bg-[#1a1b23] border border-slate-600 rounded px-2 py-1 text-white text-xs outline-none focus:border-indigo-500" placeholder="---" />
+                      ) : <span className="text-slate-700">---</span>}
                     </td>
-                    <td className="p-4 font-bold">{day.yield.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>

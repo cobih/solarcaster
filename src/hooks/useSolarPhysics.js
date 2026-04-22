@@ -55,9 +55,6 @@ export const useSolarPhysics = (config, dbSyncing) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const capacityEast = (config.eastCount * PANEL_WATTAGE) / 1000;
-  const capacityWest = (config.westCount * PANEL_WATTAGE) / 1000;
-
   useEffect(() => {
     if (dbSyncing) return;
 
@@ -92,9 +89,16 @@ export const useSolarPhysics = (config, dbSyncing) => {
           const dhi = hourly.diffuse_radiation[i];
           const solarPos = getSolarPosition(date, LATITUDE, LONGITUDE);
 
-          const eastKw = calculateArrayPower(dni, dhi, temp, solarPos, 90, config.tilt, capacityEast, config.eff);
-          const westKw = calculateArrayPower(dni, dhi, temp, solarPos, 270, config.tilt, capacityWest, config.eff);
-          const totalKw = eastKw + westKw;
+          let totalKw = 0;
+          const stringPowers = {};
+
+          // Dynamic multi-string calculation
+          (config.strings || []).forEach(s => {
+            const stringCapacity = (s.count * PANEL_WATTAGE) / 1000;
+            const pwr = calculateArrayPower(dni, dhi, temp, solarPos, s.azimuth, s.tilt, stringCapacity, config.eff);
+            totalKw += pwr;
+            stringPowers[s.id] = Number(pwr.toFixed(2));
+          });
 
           const localTimeLabel = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
           const dayLabel = date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
@@ -110,7 +114,7 @@ export const useSolarPhysics = (config, dbSyncing) => {
           const dayOffset = Math.round((itemMidnight - todayMidnight) / (1000 * 60 * 60 * 24));
           
           if (!totalsByDay[dayLabel]) {
-            totalsByDay[dayLabel] = { date: itemMidnight, dayLabel, dayOffset, yield: 0, eastYield: 0, westYield: 0 };
+            totalsByDay[dayLabel] = { date: itemMidnight, dayLabel, dayOffset, yield: 0, strings: {} };
           }
           
           processedData.push({
@@ -118,20 +122,19 @@ export const useSolarPhysics = (config, dbSyncing) => {
             dayLabel, 
             timeLabel: localTimeLabel, 
             fullLabel,
-            east: Number(eastKw.toFixed(2)),
-            west: Number(westKw.toFixed(2)),
             total: Number(totalKw.toFixed(2)),
+            stringPowers,
             cloudCover: hourly.cloudcover[i],
-            cumulativeYield: Number(totalsByDay[dayLabel].yield.toFixed(2)), // Starts at 0 because yield isn't updated yet
+            cumulativeYield: Number(totalsByDay[dayLabel].yield.toFixed(2)),
           });
 
-          // Increment totals for the day AFTER pushing to processedData
           totalsByDay[dayLabel].yield += totalKw;
-          totalsByDay[dayLabel].eastYield += eastKw;
-          totalsByDay[dayLabel].westYield += westKw;
+          // Accumulate per-string daily yield
+          Object.keys(stringPowers).forEach(id => {
+            totalsByDay[dayLabel].strings[id] = (totalsByDay[dayLabel].strings[id] || 0) + stringPowers[id];
+          });
         }
 
-        // Add daily total to each point for easy percentage access
         const finalData = processedData.map(point => ({
           ...point,
           dayTotal: totalsByDay[point.dayLabel].yield
@@ -150,7 +153,9 @@ export const useSolarPhysics = (config, dbSyncing) => {
     fetchSolarData();
     const intervalId = setInterval(fetchSolarData, 5 * 60 * 1000);
     return () => clearInterval(intervalId);
-  }, [config, capacityEast, capacityWest, dbSyncing]);
+  }, [config, dbSyncing]);
 
-  return { data, dailyTotals, nowLabel, loading, error, totalCapacity: capacityEast + capacityWest };
+  const totalCapacity = (config.strings || []).reduce((acc, s) => acc + (s.count * PANEL_WATTAGE / 1000), 0);
+
+  return { data, dailyTotals, nowLabel, loading, error, totalCapacity };
 };
