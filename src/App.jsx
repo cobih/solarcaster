@@ -26,6 +26,16 @@ export default function App() {
 
   const [showConfig, setShowConfig] = useState(false);
   const [selectedDayLabel, setSelectedDayLabel] = useState("");
+  const [visibleSeries, setVisibleSeries] = useState({
+    total: true,
+    energy: true,
+    clouds: true,
+    strings: true
+  });
+
+  const toggleSeries = (key) => {
+    setVisibleSeries(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   const maxKw = data.length > 0 ? Math.max(...data.map(d => d.total)) : 0;
   const todayForecast = dailyTotals.find(d => d.dayOffset === 0) || { yield: 0, eastYield: 0, westYield: 0, dayLabel: '' };
@@ -385,10 +395,36 @@ export default function App() {
           </div>
         </div>
 
-        {/* DRILL DOWN */}
-        {selectedDayData.length > 0 && selectedDaySummary && (
           <div className="bg-[#252630] p-5 md:p-6 rounded-2xl border border-indigo-500/30 shadow-lg">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2 mb-6"><Calendar className="w-5 h-5 text-indigo-400" /> Hourly Profile: {selectedDayLabel}</h2>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Calendar className="w-5 h-5 text-indigo-400" /> Hourly Profile: {selectedDayLabel}</h2>
+              <div className="flex flex-wrap gap-2">
+                <button 
+                  onClick={() => toggleSeries('clouds')} 
+                  className={`px-2 py-1 rounded text-[10px] font-bold transition-all border ${visibleSeries.clouds ? 'bg-slate-700 border-slate-500 text-slate-200' : 'bg-transparent border-slate-800 text-slate-600'}`}
+                >
+                  Cloud Cover
+                </button>
+                <button 
+                  onClick={() => toggleSeries('total')} 
+                  className={`px-2 py-1 rounded text-[10px] font-bold transition-all border ${visibleSeries.total ? 'bg-[#fde047]/20 border-[#fde047]/50 text-[#fde047]' : 'bg-transparent border-slate-800 text-slate-600'}`}
+                >
+                  Total Power
+                </button>
+                <button 
+                  onClick={() => toggleSeries('energy')} 
+                  className={`px-2 py-1 rounded text-[10px] font-bold transition-all border ${visibleSeries.energy ? 'bg-[#818cf8]/20 border-[#818cf8]/50 text-[#818cf8]' : 'bg-transparent border-slate-800 text-slate-600'}`}
+                >
+                  Cumulative Energy
+                </button>
+                <button 
+                  onClick={() => toggleSeries('strings')} 
+                  className={`px-2 py-1 rounded text-[10px] font-bold transition-all border ${visibleSeries.strings ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-400' : 'bg-transparent border-slate-800 text-slate-600'}`}
+                >
+                  Individual Strings
+                </button>
+              </div>
+            </div>
             <div className="h-[250px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={selectedDayData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
@@ -400,33 +436,21 @@ export default function App() {
                     contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc' }} 
                     itemStyle={{ fontWeight: 'bold' }} 
                     labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
-                    formatter={(value, name) => {
-                      if (name === "Total Energy (kWh)") {
-                        return [`${value} kWh`, name];
-                      }
-                      if (name === "Cloud Cover (%)") return [`${value}%`, name];
-                      return [`${value} kW`, name];
-                    }}
                     content={({ active, payload, label }) => {
                       if (active && payload && payload.length) {
                         return (
                           <div className="bg-[#1e293b] border border-slate-700 p-3 rounded-lg shadow-xl text-xs space-y-2">
                             <p className="font-bold text-slate-400 mb-1">{label}</p>
                             <div className="space-y-1">
-                              {payload.map((entry, idx) => {
-                                // Only show total and cumulative with high prominence
-                                const isTotal = entry.dataKey === 'total';
-                                const isCum = entry.dataKey === 'cumulativeYield';
-                                return (
-                                  <div key={idx} className={`flex items-center justify-between gap-4 ${isTotal || isCum ? 'pt-1 border-t border-slate-800 font-bold' : ''}`}>
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }}></div>
-                                      <span className="text-slate-300">{entry.name}:</span>
-                                    </div>
-                                    <span className="text-white font-mono">{entry.value} {entry.dataKey === 'cumulativeYield' ? 'kWh' : 'kW'}</span>
+                              {payload.map((entry, idx) => (
+                                <div key={idx} className={`flex items-center justify-between gap-4 ${(entry.dataKey === 'total' || entry.dataKey === 'cumulativeYield') ? 'pt-1 border-t border-slate-800 font-bold' : ''}`}>
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }}></div>
+                                    <span className="text-slate-300">{entry.name}:</span>
                                   </div>
-                                );
-                              })}
+                                  <span className="text-white font-mono">{entry.value} {entry.dataKey === 'cumulativeYield' ? 'kWh' : (entry.dataKey === 'cloudCover' ? '%' : 'kW')}</span>
+                                </div>
+                              ))}
                             </div>
                           </div>
                         );
@@ -434,16 +458,16 @@ export default function App() {
                       return null;
                     }}
                   />
-                  <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px', color: '#cbd5e1' }} />
                   
-                  {/* Invisible Cloud Cover to use its data for overlay */}
-                  <Area yAxisId="right" type="monotone" dataKey="cloudCover" name="Cloud Cover (%)" stroke="none" fill="#475569" fillOpacity={0.1} hide={false} />
+                  {visibleSeries.clouds && (
+                    <Area yAxisId="right" type="monotone" dataKey="cloudCover" name="Cloud Cover (%)" stroke="none" fill="#475569" fillOpacity={0.1} />
+                  )}
                   
-                  {/* Power Generation (Spot) */}
-                  <Area type="monotone" dataKey="total" name="Total Power (kW)" stroke="#fde047" fill="#fde047" fillOpacity={0.1} strokeWidth={2} />
+                  {visibleSeries.total && (
+                    <Area type="monotone" dataKey="total" name="Total Power (kW)" stroke="#fde047" fill="#fde047" fillOpacity={0.1} strokeWidth={2} />
+                  )}
                   
-                  {/* Dynamic Individual String Curves */}
-                  {(config.strings || []).map((s, idx) => (
+                  {visibleSeries.strings && (config.strings || []).map((s, idx) => (
                     <Line 
                       key={s.id}
                       type="monotone" 
@@ -456,23 +480,23 @@ export default function App() {
                     />
                   ))}
 
-                  {/* Cumulative Yield (The goal) */}
-                  <Line 
-                    yAxisId="right"
-                    type="monotone" 
-                    dataKey="cumulativeYield" 
-                    name="Total Energy (kWh)" 
-                    stroke="#818cf8" 
-                    strokeWidth={3} 
-                    dot={false} 
-                  />
+                  {visibleSeries.energy && (
+                    <Line 
+                      yAxisId="right"
+                      type="monotone" 
+                      dataKey="cumulativeYield" 
+                      name="Total Energy (kWh)" 
+                      stroke="#818cf8" 
+                      strokeWidth={3} 
+                      dot={false} 
+                    />
+                  )}
 
                   {currentHourTick && <ReferenceLine x={currentHourTick} stroke="#818cf8" strokeDasharray="4 4" />}
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
           </div>
-        )}
 
         {/* TABLE */}
         <div className="bg-[#252630] rounded-2xl border border-slate-700/50 overflow-hidden shadow-lg">
