@@ -22,7 +22,7 @@ import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
 // const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: "solar-forecaster-63320.web.app", // Matches hosting domain for better PWA support
+  authDomain: "solar-forecaster-63320.firebaseapp.com", // Standard domain for OAuth redirects
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
