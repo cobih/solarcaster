@@ -113,11 +113,6 @@ export const useSolarPhysics = (config, dbSyncing) => {
             totalsByDay[dayLabel] = { date: itemMidnight, dayLabel, dayOffset, yield: 0, eastYield: 0, westYield: 0 };
           }
           
-          // Increment totals for the day BEFORE pushing to processedData so we get running totals
-          totalsByDay[dayLabel].yield += totalKw;
-          totalsByDay[dayLabel].eastYield += eastKw;
-          totalsByDay[dayLabel].westYield += westKw;
-
           processedData.push({
             date, 
             dayLabel, 
@@ -127,8 +122,13 @@ export const useSolarPhysics = (config, dbSyncing) => {
             west: Number(westKw.toFixed(2)),
             total: Number(totalKw.toFixed(2)),
             cloudCover: hourly.cloudcover[i],
-            cumulativeYield: Number(totalsByDay[dayLabel].yield.toFixed(2)),
+            cumulativeYield: Number(totalsByDay[dayLabel].yield.toFixed(2)), // Starts at 0 because yield isn't updated yet
           });
+
+          // Increment totals for the day AFTER pushing to processedData
+          totalsByDay[dayLabel].yield += totalKw;
+          totalsByDay[dayLabel].eastYield += eastKw;
+          totalsByDay[dayLabel].westYield += westKw;
         }
 
         // Add daily total to each point for easy percentage access

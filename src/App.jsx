@@ -305,10 +305,9 @@ export default function App() {
                     contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc' }} 
                     itemStyle={{ fontWeight: 'bold' }} 
                     labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
-                    formatter={(value, name, props) => {
+                    formatter={(value, name) => {
                       if (name === "Energy (Cumulative)") {
-                        const pct = props.payload.dayTotal > 0 ? ((value / props.payload.dayTotal) * 100).toFixed(0) : 0;
-                        return [`${value} kWh (${pct}% of day)`, name];
+                        return [`${value} kWh`, name];
                       }
                       if (name === "Cloud Cover (%)") return [`${value}%`, name];
                       return [`${value} kW`, name];
