@@ -8,6 +8,30 @@
   </head>
   <body>
     <div id="root"></div>
+    <div id="error-display" style="display:none; color: white; background: #991b1b; padding: 20px; font-family: monospace; position: fixed; top: 0; left: 0; right: 0; z-index: 9999;">
+      <h2 style="margin-top: 0;">Runtime Error Detected:</h2>
+      <pre id="error-message"></pre>
+      <button onclick="location.reload()" style="background: white; color: black; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Reload Page</button>
+    </div>
+    <script>
+      window.onerror = function(message, source, lineno, colno, error) {
+        const display = document.getElementById('error-display');
+        const msg = document.getElementById('error-message');
+        if (display && msg) {
+          display.style.display = 'block';
+          msg.textContent = message + '\n\n' + (error ? error.stack : '');
+        }
+        return false;
+      };
+      window.onunhandledrejection = function(event) {
+        const display = document.getElementById('error-display');
+        const msg = document.getElementById('error-message');
+        if (display && msg) {
+          display.style.display = 'block';
+          msg.textContent = 'Unhandled Rejection: ' + event.reason;
+        }
+      };
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

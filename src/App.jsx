@@ -387,11 +387,21 @@ export default function App() {
 
   // --- AUTO-CALIBRATION SYNC ---
   useEffect(() => {
-    if (!dbSyncing && user && canApply && daysEntered >= 3) {
-      console.log("Auto-applying calibration:", suggestedEff);
-      saveConfigToCloud({ ...config, eff: suggestedEff });
+    // Only auto-apply if we have significant data (3+ days) 
+    // AND it's a significant change (> 1%)
+    // AND we are not currently syncing with DB
+    // AND we haven't already applied this suggested value
+    const significantChange = Math.abs(config.eff - suggestedEff) > 0.01;
+    
+    if (!dbSyncing && user && daysEntered >= 3 && significantChange) {
+      // Use a small delay to ensure state has settled
+      const timer = setTimeout(() => {
+        console.log("Auto-applying calibration:", suggestedEff);
+        saveConfigToCloud({ ...config, eff: suggestedEff });
+      }, 1000);
+      return () => clearTimeout(timer);
     }
-  }, [suggestedEff, canApply, daysEntered, dbSyncing, user]);
+  }, [dbSyncing, user, daysEntered > 3, Math.round(suggestedEff * 100)]);
 
   // Hourly Drill-down Data
   const selectedDayData = data.filter(d => d.dayLabel === selectedDayLabel);
