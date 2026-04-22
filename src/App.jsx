@@ -186,18 +186,21 @@ export default function App() {
       setUser(currentUser);
       setAuthLoading(false);
       if (currentUser) {
-        setDbSyncing(true);
-        setAuthError(null); // Clear errors on success
+        setDbSyncing(true); // Ensure this is set
+        setAuthError(null);
       }
     });
 
-    // Safety fallback
+    // Safety fallback: if we have a user but sync hasn't started, force it
     const timer = setTimeout(() => {
       if (isMounted) {
-        console.log("Auth timer expired. authLoading was:", authLoading);
         setAuthLoading(false);
+        if (auth.currentUser) {
+           console.log("Force-triggering sync via safety timer");
+           setDbSyncing(true);
+        }
       }
-    }, 4000);
+    }, 3000);
 
     return () => {
       isMounted = false;
