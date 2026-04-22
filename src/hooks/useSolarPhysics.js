@@ -106,25 +106,38 @@ export const useSolarPhysics = (config, dbSyncing) => {
             currentNowLabel = fullLabel;
           }
 
-          processedData.push({
-            date, dayLabel, timeLabel: localTimeLabel, fullLabel,
-            east: Number(eastKw.toFixed(2)),
-            west: Number(westKw.toFixed(2)),
-            total: Number(totalKw.toFixed(2)),
-            cloudCover: hourly.cloudcover[i], // Extract cloud cover %
-          });
-
           const itemMidnight = new Date(date.getFullYear(), date.getMonth(), date.getDate());
           const dayOffset = Math.round((itemMidnight - todayMidnight) / (1000 * 60 * 60 * 24));
+          
           if (!totalsByDay[dayLabel]) {
             totalsByDay[dayLabel] = { date: itemMidnight, dayLabel, dayOffset, yield: 0, eastYield: 0, westYield: 0 };
           }
+          
+          // Increment totals for the day BEFORE pushing to processedData so we get running totals
           totalsByDay[dayLabel].yield += totalKw;
           totalsByDay[dayLabel].eastYield += eastKw;
           totalsByDay[dayLabel].westYield += westKw;
+
+          processedData.push({
+            date, 
+            dayLabel, 
+            timeLabel: localTimeLabel, 
+            fullLabel,
+            east: Number(eastKw.toFixed(2)),
+            west: Number(westKw.toFixed(2)),
+            total: Number(totalKw.toFixed(2)),
+            cloudCover: hourly.cloudcover[i],
+            cumulativeYield: Number(totalsByDay[dayLabel].yield.toFixed(2)),
+          });
         }
 
-        setData(processedData);
+        // Add daily total to each point for easy percentage access
+        const finalData = processedData.map(point => ({
+          ...point,
+          dayTotal: totalsByDay[point.dayLabel].yield
+        }));
+
+        setData(finalData);
         setNowLabel(currentNowLabel);
         setDailyTotals(Object.values(totalsByDay).sort((a, b) => a.date - b.date));
       } catch (err) {

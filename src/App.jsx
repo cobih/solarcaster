@@ -300,13 +300,41 @@ export default function App() {
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
                   <XAxis dataKey="timeLabel" interval={3} stroke="#64748b" fontSize={11} tickMargin={10} axisLine={false} tickLine={false} />
                   <YAxis stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} tickMargin={10} />
-                  <YAxis yAxisId="right" orientation="right" hide={true} domain={[0, 100]} />
-                  <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc' }} itemStyle={{ fontWeight: 'bold' }} labelStyle={{ color: '#94a3b8', marginBottom: '4px' }} />
+                  <YAxis yAxisId="right" orientation="right" stroke="#818cf8" fontSize={10} axisLine={false} tickLine={false} tickMargin={10} unit="kWh" />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc' }} 
+                    itemStyle={{ fontWeight: 'bold' }} 
+                    labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
+                    formatter={(value, name, props) => {
+                      if (name === "Energy (Cumulative)") {
+                        const pct = props.payload.dayTotal > 0 ? ((value / props.payload.dayTotal) * 100).toFixed(0) : 0;
+                        return [`${value} kWh (${pct}% of day)`, name];
+                      }
+                      if (name === "Cloud Cover (%)") return [`${value}%`, name];
+                      return [`${value} kW`, name];
+                    }}
+                  />
                   <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px', color: '#cbd5e1' }} />
-                  <Area yAxisId="right" type="monotone" dataKey="cloudCover" name="Cloud Cover (%)" stroke="none" fill="#475569" fillOpacity={0.1} />
-                  <Area type="monotone" dataKey="total" name="Total" stroke="#fde047" fill="#fde047" fillOpacity={0.1} strokeWidth={2} />
-                  <Line type="monotone" dataKey="east" name="East" stroke="#f59e0b" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="west" name="West" stroke="#ef4444" strokeWidth={2} dot={false} />
+                  
+                  {/* Invisible Cloud Cover to use its data for overlay */}
+                  <Area yAxisId="right" type="monotone" dataKey="cloudCover" name="Cloud Cover (%)" stroke="none" fill="#475569" fillOpacity={0.1} hide={false} />
+                  
+                  {/* Power Generation (Spot) */}
+                  <Area type="monotone" dataKey="total" name="Total Power (kW)" stroke="#fde047" fill="#fde047" fillOpacity={0.1} strokeWidth={2} />
+                  <Line type="monotone" dataKey="east" name="East (kW)" stroke="#f59e0b" strokeWidth={1} dot={false} strokeDasharray="5 5" />
+                  <Line type="monotone" dataKey="west" name="West (kW)" stroke="#ef4444" strokeWidth={1} dot={false} strokeDasharray="5 5" />
+
+                  {/* Cumulative Yield (The goal) */}
+                  <Line 
+                    yAxisId="right"
+                    type="monotone" 
+                    dataKey="cumulativeYield" 
+                    name="Energy (Cumulative)" 
+                    stroke="#818cf8" 
+                    strokeWidth={3} 
+                    dot={false} 
+                  />
+
                   {currentHourTick && <ReferenceLine x={currentHourTick} stroke="#818cf8" strokeDasharray="4 4" />}
                 </ComposedChart>
               </ResponsiveContainer>
