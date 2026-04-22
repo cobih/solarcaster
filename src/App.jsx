@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import {
   Sun, Calendar, Settings, AlertCircle, Info, Target, Calculator, Zap, Cloud,
-  LogOut, LogIn, User, Plus, Trash2
+  LogOut, LogIn, User, Plus, Trash2, Activity
 } from 'lucide-react';
 
 import { useSolarAuth } from './hooks/useSolarAuth';
@@ -151,16 +151,21 @@ export default function App() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              Dynamic Solar Forecaster
-              <Cloud className="w-5 h-5 text-emerald-400 ml-2" title="Cloud Sync Active" />
+              Solarcaster
+              <Cloud className="w-5 h-5 text-emerald-400 ml-2" aria-label="Cloud sync active" />
             </h1>
             <p className="text-slate-400 text-sm mt-1 flex items-center gap-1">
-              <Info className="w-4 h-4" /> 53.3767°N, -6.3286°W • Connected as {user.email}
+              <Info className="w-4 h-4" aria-hidden="true" /> 53.3767°N, -6.3286°W • Connected as {user.email}
             </p>
           </div>
           <div className="flex items-center gap-3 w-full md:w-auto">
-            <button onClick={() => setShowConfig(!showConfig)} className="px-4 py-2 bg-[#252630] hover:bg-[#2d2e3a] border border-slate-700 text-slate-300 rounded-lg flex items-center gap-2 transition-colors text-sm font-medium shadow-sm">
-              <Settings className="w-4 h-4" /> Parameters
+            <button 
+              onClick={() => setShowConfig(!showConfig)} 
+              className={`relative px-4 py-2 bg-[#252630] hover:bg-[#2d2e3a] border ${canApply ? 'border-amber-500/50 text-amber-400' : 'border-slate-700 text-slate-300'} rounded-lg flex items-center gap-2 transition-colors text-sm font-medium shadow-sm`}
+            >
+              {canApply ? <Activity className="w-4 h-4 animate-pulse" /> : <Settings className="w-4 h-4" />}
+              Parameters
+              {canApply && <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full border-2 border-[#1a1b23]"></span>}
             </button>
             <div className="flex items-center gap-2 bg-[#252630] p-1 pr-3 rounded-full border border-slate-700 shadow-sm">
               {user.photoURL ? (
@@ -256,21 +261,31 @@ export default function App() {
               <div key={s.id} className="flex items-center gap-2 text-[10px] text-slate-500">
                 <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: STRING_COLORS[idx % STRING_COLORS.length] }}></div>
                 <span className="truncate flex-1">{s.name}:</span>
+                <Zap className="w-2 h-2" aria-hidden="true" />
                 <span className="font-mono text-slate-400">{(todayForecast.strings?.[s.id] || 0).toFixed(1)}</span>
               </div>
             ))}
-          </div>
-        </div>
+          </div>        </div>
           <div className="bg-gradient-to-br from-[#1e293b] to-[#0f172a] p-5 rounded-xl border border-indigo-500/30 shadow-sm flex flex-col justify-between">
             <div>
-              <label className="text-indigo-300 text-sm font-medium mb-1 flex items-center gap-2"><Zap className="w-4 h-4" /> Today's Inverter Actual</label>
+              <label className="text-indigo-300 text-sm font-medium mb-1 flex items-center gap-2">
+                <Zap className="w-4 h-4 text-indigo-400" aria-hidden="true" /> 
+                Today's Inverter Actual
+              </label>
               <div className="mt-2 flex items-center gap-2">
-                <input type="number" value={actuals[todayForecast.dayLabel] || ''} onChange={e => saveActualToCloud(todayForecast.dayLabel, e.target.value)}
-                  className="w-full bg-[#1a1b23]/50 border-b-2 border-indigo-500 p-1 text-3xl font-bold text-white outline-none focus:border-indigo-400 transition-colors" step="0.1" placeholder="0.0" />
-                <span className="text-slate-500 font-medium">kWh</span>
+                <input 
+                  type="number" 
+                  value={actuals[todayForecast.dayLabel] || ''} 
+                  onChange={e => saveActualToCloud(todayForecast.dayLabel, e.target.value)}
+                  aria-label="Enter today's total kWh from your inverter"
+                  className="w-full bg-[#1a1b23]/50 border-b-2 border-indigo-500 p-1 text-3xl font-bold text-white outline-none focus:border-indigo-400 transition-colors" 
+                  step="0.1" 
+                  placeholder="0.0" 
+                />
+                <span className="text-slate-500 font-medium uppercase text-xs">kWh</span>
               </div>
             </div>
-            <p className="mt-4 text-[11px] text-slate-500 leading-tight">Type what your app says today. Autosaves to cloud.</p>
+            <p className="mt-4 text-[11px] text-slate-500 leading-tight">Syncs to secure cloud for model auto-calibration.</p>
           </div>
 
           <div className={`p-5 rounded-xl border shadow-sm flex flex-col justify-between ${daysEntered > 0 ? (isAccurate ? 'bg-emerald-900/10 border-emerald-500/20' : 'bg-amber-900/10 border-amber-500/20') : 'bg-[#252630] border-slate-700/50'}`}>
@@ -349,10 +364,20 @@ export default function App() {
                 <Area
                   type="monotone"
                   dataKey="total"
-                  name="Model Generation"
+                  name="Model Power (kW)"
                   stroke="#fde047"
                   fill="url(#colorYellow)"
                   strokeWidth={2}
+                />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="cumulativeYield"
+                  name="Total Energy (kWh)"
+                  stroke="#818cf8"
+                  strokeWidth={1.5}
+                  dot={false}
+                  strokeDasharray="3 3"
                 />
                 {nowLabel && <ReferenceLine x={nowLabel} stroke="#818cf8" strokeDasharray="4 4" label={{ position: 'insideTopLeft', value: 'CURRENT TIME', fill: '#818cf8', fontSize: 10, fontWeight: 600 }} />}
               </AreaChart>
@@ -376,7 +401,7 @@ export default function App() {
                     itemStyle={{ fontWeight: 'bold' }} 
                     labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
                     formatter={(value, name) => {
-                      if (name === "Energy (Cumulative)") {
+                      if (name === "Total Energy (kWh)") {
                         return [`${value} kWh`, name];
                       }
                       if (name === "Cloud Cover (%)") return [`${value}%`, name];
@@ -436,7 +461,7 @@ export default function App() {
                     yAxisId="right"
                     type="monotone" 
                     dataKey="cumulativeYield" 
-                    name="Energy (Cumulative)" 
+                    name="Total Energy (kWh)" 
                     stroke="#818cf8" 
                     strokeWidth={3} 
                     dot={false} 
@@ -473,22 +498,31 @@ export default function App() {
                     <td className="p-4">{day.date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</td>
                     <td className="p-4">
                       {day.dayOffset < 0 ? (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-500">PAST</span>
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-500 uppercase">Past</span>
                       ) : day.dayOffset === 0 ? (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400">TODAY</span>
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 uppercase">Today</span>
                       ) : (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500">FCST</span>
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 uppercase">Fcst</span>
                       )}
                     </td>
                     {(config.strings || []).map(s => (
-                      <td key={s.id} className="p-4 text-slate-500 font-mono text-xs">{(day.strings?.[s.id] || 0).toFixed(1)}</td>
+                      <td key={s.id} className="p-4 text-slate-400 font-mono text-xs">{(day.strings?.[s.id] || 0).toFixed(1)}</td>
                     ))}
                     <td className="p-4 font-bold text-white">{(day.yield || 0).toFixed(2)}</td>
                     <td className="p-4" onClick={e => e.stopPropagation()}>
                       {day.dayOffset <= 0 ? (
-                        <input type="number" value={actuals[day.dayLabel] || ''} onChange={e => saveActualToCloud(day.dayLabel, e.target.value)}
-                          className="w-20 bg-[#1a1b23] border border-slate-600 rounded px-2 py-1 text-white text-xs outline-none focus:border-indigo-500" placeholder="---" />
-                      ) : <span className="text-slate-700">---</span>}
+                        <div className="flex items-center gap-2">
+                          <input 
+                            type="number" 
+                            value={actuals[day.dayLabel] || ''} 
+                            onChange={e => saveActualToCloud(day.dayLabel, e.target.value)}
+                            aria-label={`Inverter actual for ${day.dayLabel}`}
+                            className="w-24 h-9 bg-[#1a1b23] border border-slate-600 rounded-lg px-2 text-white text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-mono" 
+                            placeholder="0.0" 
+                          />
+                          <Zap className="w-3 h-3 text-slate-600" aria-hidden="true" />
+                        </div>
+                      ) : <span className="text-slate-700 italic text-xs px-4">Predicted</span>}
                     </td>
                   </tr>
                 ))}
