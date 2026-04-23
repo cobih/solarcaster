@@ -39,9 +39,22 @@ export default function App() {
     }
     setSearchLoading(true);
     try {
-      const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5&language=en&format=json`);
-      const json = await res.json();
-      setSearchResults(json.results || []);
+      // Nominatim (OSM) is much better for European/Irish addresses and Eircodes
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=5`);
+      const results = await res.json();
+      
+      // Map Nominatim format to our internal format
+      const mapped = results.map(r => ({
+        id: r.place_id,
+        name: r.display_name.split(',')[0],
+        admin1: r.address.county || r.address.state || '',
+        country: r.address.country,
+        latitude: parseFloat(r.lat),
+        longitude: parseFloat(r.lon),
+        fullName: r.display_name
+      }));
+      
+      setSearchResults(mapped);
     } catch (err) {
       console.error("Geocoding error:", err);
     } finally {
@@ -54,7 +67,7 @@ export default function App() {
       ...config, 
       lat: res.latitude, 
       long: res.longitude,
-      locationName: `${res.name}${res.admin1 ? ', ' + res.admin1 : ''}, ${res.country}`
+      locationName: res.name + (res.admin1 ? ', ' + res.admin1 : '')
     });
     setSearchResults([]);
     setAddressQuery("");
