@@ -5,7 +5,8 @@ import {
 } from 'recharts';
 import {
   Sun, Calendar, Settings, AlertCircle, Info, Target, Calculator, Zap, Cloud,
-  LogOut, LogIn, User, Plus, Trash2, Activity
+  LogOut, LogIn, User, Plus, Trash2, Activity,
+  MapPin, Search, Navigation
 } from 'lucide-react';
 
 import { useSolarAuth } from './hooks/useSolarAuth';
@@ -26,6 +27,39 @@ export default function App() {
 
   const [showConfig, setShowConfig] = useState(false);
   const [selectedDayLabel, setSelectedDayLabel] = useState("");
+  const [addressQuery, setAddressQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+
+  const searchAddress = async (q) => {
+    setAddressQuery(q);
+    if (q.length < 3) {
+      setSearchResults([]);
+      return;
+    }
+    setSearchLoading(true);
+    try {
+      const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5&language=en&format=json`);
+      const json = await res.json();
+      setSearchResults(json.results || []);
+    } catch (err) {
+      console.error("Geocoding error:", err);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const selectLocation = (res) => {
+    saveConfigToCloud({ 
+      ...config, 
+      lat: res.latitude, 
+      long: res.longitude,
+      locationName: `${res.name}${res.admin1 ? ', ' + res.admin1 : ''}, ${res.country}`
+    });
+    setSearchResults([]);
+    setAddressQuery("");
+  };
+
   const [visibleSeries, setVisibleSeries] = useState({
     total: true,
     energy: true,
@@ -106,8 +140,8 @@ export default function App() {
     return (
       <div className="flex items-center justify-center h-screen bg-[#1a1b23] text-white">
         <div className="text-center">
-          <Sun className="w-12 h-12 mx-auto mb-4 text-indigo-500 animate-spin-slow" />
-          <h2 className="text-xl font-semibold">Checking Authentication...</h2>
+          <MapPin className="w-12 h-12 mx-auto mb-4 text-indigo-500 animate-pulse" />
+          <h2 className="text-xl font-semibold tracking-tight text-slate-400">Authenticating...</h2>
         </div>
       </div>
     );
@@ -165,7 +199,8 @@ export default function App() {
               <Cloud className="w-5 h-5 text-emerald-400 ml-2" aria-label="Cloud sync active" />
             </h1>
             <p className="text-slate-400 text-sm mt-1 flex items-center gap-1">
-              <Info className="w-4 h-4" aria-hidden="true" /> 53.3767°N, -6.3286°W • Connected as {user.email}
+              <MapPin className="w-4 h-4 text-indigo-400" aria-hidden="true" /> 
+              {config.locationName || `${config.lat?.toFixed(2)}°N, ${config.long?.toFixed(2)}°W`} • Connected as {user.email}
             </p>
           </div>
           <div className="flex items-center gap-3 w-full md:w-auto">
@@ -191,8 +226,52 @@ export default function App() {
         {/* CONFIG PANEL */}
         {showConfig && (
           <div className="bg-[#252630] p-5 rounded-xl border border-slate-700 shadow-lg animate-in fade-in slide-in-from-top-4 space-y-6">
+            
+            {/* LOCATION SEARCH SECTION */}
+            <div className="space-y-3 pb-4 border-b border-slate-700/50">
+              <h4 className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
+                <MapPin className="w-3 h-3" /> System Location
+              </h4>
+              <div className="relative">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <input 
+                    type="text" 
+                    value={addressQuery}
+                    onChange={(e) => searchAddress(e.target.value)}
+                    placeholder="Search address or city..."
+                    className="w-full pl-10 pr-4 py-2.5 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white focus:border-indigo-500 outline-none transition-all"
+                  />
+                  {searchLoading && <Activity className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-500 animate-spin" />}
+                </div>
+
+                {searchResults.length > 0 && (
+                  <div className="absolute z-50 mt-2 w-full bg-[#1a1b23] border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
+                    {searchResults.map((res) => (
+                      <button 
+                        key={res.id} 
+                        onClick={() => selectLocation(res)}
+                        className="w-full px-4 py-3 text-left text-sm text-slate-300 hover:bg-indigo-600/20 hover:text-white border-b border-slate-800 last:border-0 transition-colors flex items-center gap-3"
+                      >
+                        <Navigation className="w-3 h-3 text-indigo-400" />
+                        <div>
+                          <div className="font-bold">{res.name}</div>
+                          <div className="text-[10px] text-slate-500">{res.admin1 ? res.admin1 + ', ' : ''}{res.country}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-4 text-[11px] text-slate-400 font-mono bg-[#1a1b23] p-2 rounded-lg border border-slate-800/50">
+                <div className="flex items-center gap-1"><span className="text-slate-600">LAT:</span> <span className="text-white">{config.lat?.toFixed(4)}</span></div>
+                <div className="flex items-center gap-1"><span className="text-slate-600">LON:</span> <span className="text-white">{config.long?.toFixed(4)}</span></div>
+                {config.locationName && <div className="ml-auto text-indigo-400 italic truncate max-w-[200px]">{config.locationName}</div>}
+              </div>
+            </div>
+
             <div className="flex justify-between items-center border-b border-slate-700 pb-4">
-              <h3 className="font-semibold text-white text-sm flex items-center gap-2"><Calculator className="w-4 h-4 text-amber-400" /> System Configuration</h3>
+              <h3 className="font-semibold text-white text-sm flex items-center gap-2"><Calculator className="w-4 h-4 text-amber-400" /> String Configuration</h3>
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                    <label className="text-[10px] text-slate-400 uppercase font-bold">System Efficiency</label>

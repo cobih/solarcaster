@@ -64,9 +64,12 @@ export const useSolarPhysics = (config, dbSyncing) => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
+      const lat = config.lat || 53.3767;
+      const long = config.long || -6.3286;
+
       try {
         const response = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${LATITUDE}&longitude=${LONGITUDE}&hourly=temperature_2m,direct_normal_irradiance,diffuse_radiation,cloudcover&timezone=GMT&forecast_days=7&past_days=7`,
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${long}&hourly=temperature_2m,direct_normal_irradiance,diffuse_radiation,cloudcover&timezone=GMT&forecast_days=7&past_days=7`,
           { signal: controller.signal }
         );
         clearTimeout(timeoutId);
@@ -87,7 +90,7 @@ export const useSolarPhysics = (config, dbSyncing) => {
           const temp = hourly.temperature_2m[i];
           const dni = hourly.direct_normal_irradiance[i];
           const dhi = hourly.diffuse_radiation[i];
-          const solarPos = getSolarPosition(date, LATITUDE, LONGITUDE);
+          const solarPos = getSolarPosition(date, lat, long);
 
           let totalKw = 0;
           const stringPowers = {};

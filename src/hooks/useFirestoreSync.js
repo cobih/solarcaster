@@ -8,6 +8,8 @@ export const useFirestoreSync = (user, appId) => {
   const [lastSynced, setLastSynced] = useState(null);
 
   const [config, setConfig] = useState({
+    lat: 53.3767,
+    long: -6.3286,
     eff: 0.85,
     strings: [
       { id: 's1', name: "East String", azimuth: 90, tilt: 35, count: 11 },
@@ -34,20 +36,22 @@ export const useFirestoreSync = (user, appId) => {
       clearTimeout(timeoutId);
       if (docSnap.exists()) {
         const data = docSnap.data();
-        // Migration logic: If old flat config exists, convert it to the new multi-string format
+        
+        // Advanced Migration: Ensure lat/long and multi-string format are present
+        const migrated = { ...data };
+        if (!data.lat) migrated.lat = 53.3767;
+        if (!data.long) migrated.long = -6.3286;
+        
         if (!data.strings && data.eastCount !== undefined) {
           console.log("Migrating legacy config to multi-string...");
-          const migrated = {
-            eff: data.eff || 0.85,
-            strings: [
-              { id: 's1', name: "East String", azimuth: 90, tilt: data.tilt || 35, count: data.eastCount || 0 },
-              { id: 's2', name: "West String", azimuth: 270, tilt: data.tilt || 35, count: data.westCount || 0 }
-            ]
-          };
-          setConfig(migrated);
-        } else {
-          setConfig(data);
+          migrated.strings = [
+            { id: 's1', name: "East String", azimuth: 90, tilt: data.tilt || 35, count: data.eastCount || 0 },
+            { id: 's2', name: "West String", azimuth: 270, tilt: data.tilt || 35, count: data.westCount || 0 }
+          ];
+          migrated.eff = data.eff || 0.85;
         }
+        
+        setConfig(migrated);
       }
       setDbSyncing(false);
     }, (err) => {
