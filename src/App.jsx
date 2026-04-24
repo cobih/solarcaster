@@ -6,7 +6,8 @@ import {
 import {
   Sun, Calendar, Settings, AlertCircle, Info, Target, Calculator, Zap, Cloud,
   LogOut, LogIn, User, Plus, Trash2, Activity,
-  MapPin, Search, Navigation, LayoutDashboard, TrendingUp, History, CloudRain
+  MapPin, Search, Navigation, LayoutDashboard, TrendingUp, History, CloudRain,
+  Crosshair
 } from 'lucide-react';
 
 import { useSolarAuth } from './hooks/useSolarAuth';
@@ -32,8 +33,44 @@ export default function App() {
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [lastSearchTime, setLastSearchTime] = useState(0);
-  const [locationMode, setLocationMode] = useState("search"); // 'search', 'plus', 'manual'
+  const [locationMode, setLocationMode] = useState("gps"); // 'gps', 'search', 'plus', 'manual'
   const [manualCoords, setManualCoords] = useState({ lat: 53.3767, long: -6.3286 });
+
+  const detectLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser");
+      return;
+    }
+
+    setSearchLoading(true);
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      const { latitude, longitude } = position.coords;
+      
+      try {
+        // Reverse Geocode using Nominatim
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
+        const data = await res.json();
+        const locationName = data.address.city || data.address.town || data.address.village || data.address.suburb || "Detected Location";
+        
+        saveConfigToCloud({
+          ...config,
+          lat: latitude,
+          long: longitude,
+          locationName: `${locationName}, ${data.address.country}`
+        });
+      } catch (err) {
+        console.error("Reverse geocoding failed:", err);
+        // Fallback to coordinates only
+        saveConfigToCloud({ ...config, lat: latitude, long: longitude, locationName: "GPS Detected" });
+      } finally {
+        setSearchLoading(false);
+      }
+    }, (err) => {
+      console.error("GPS Error:", err);
+      alert("Unable to retrieve your location. Please check permissions or use manual search.");
+      setSearchLoading(false);
+    }, { enableHighAccuracy: true });
+  };
 
   const [visibleSeries, setVisibleSeries] = useState({
     total: true,
@@ -216,7 +253,7 @@ export default function App() {
                   <MapPin className="w-3 h-3" /> System Location
                 </h4>
                 <div className="flex bg-[#1a1b23] p-0.5 rounded-lg border border-slate-800">
-                  {['search', 'plus', 'manual'].map(mode => (
+                  {['gps', 'search', 'plus', 'manual'].map(mode => (
                     <button 
                       key={mode} 
                       onClick={() => setLocationMode(mode)}
@@ -227,6 +264,21 @@ export default function App() {
                   ))}
                 </div>
               </div>
+
+              {locationMode === 'gps' && (
+                <div className="animate-in fade-in slide-in-from-left-2">
+                  <button 
+                    onClick={detectLocation}
+                    disabled={searchLoading}
+                    className="w-full py-4 bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/30 rounded-xl flex flex-col items-center justify-center gap-2 transition-all group"
+                  >
+                    <Crosshair className={`w-8 h-8 ${searchLoading ? 'animate-spin text-indigo-400' : 'text-indigo-500 group-hover:scale-110 transition-transform'}`} />
+                    <span className="text-xs font-black text-indigo-400 uppercase tracking-widest">
+                      {searchLoading ? "DetectingRoof..." : "Use Current GPS Location"}
+                    </span>
+                  </button>
+                </div>
+              )}
 
               {locationMode === 'search' && (
                 <div className="relative animate-in fade-in slide-in-from-left-2">
