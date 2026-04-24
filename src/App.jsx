@@ -32,6 +32,8 @@ export default function App() {
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [lastSearchTime, setLastSearchTime] = useState(0);
+  const [locationMode, setLocationMode] = useState("search"); // 'search', 'plus', 'manual'
+  const [manualCoords, setManualCoords] = useState({ lat: 53.3767, long: -6.3286 });
 
   const [visibleSeries, setVisibleSeries] = useState({
     total: true,
