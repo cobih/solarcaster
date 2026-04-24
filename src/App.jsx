@@ -31,27 +31,34 @@ export default function App() {
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
 
+  const [lastSearchTime, setLastSearchTime] = useState(0);
+
   const searchAddress = async (q) => {
     setAddressQuery(q);
     if (q.length < 3) {
       setSearchResults([]);
       return;
     }
+
+    // Rate Limiting: Max 1 search every 500ms
+    const now = Date.now();
+    if (now - lastSearchTime < 500) return;
+    setLastSearchTime(now);
+
     setSearchLoading(true);
     try {
-      // Nominatim (OSM) is much better for European/Irish addresses and Eircodes
       const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=5`);
       const results = await res.json();
       
-      // Map Nominatim format to our internal format
       const mapped = results.map(r => ({
         id: r.place_id,
-        name: r.display_name.split(',')[0],
-        admin1: r.address.county || r.address.state || '',
-        country: r.address.country,
+        // Basic sanitization: Ensure we only take the first segment and remove any HTML tags
+        name: (r.display_name.split(',')[0] || "").replace(/<[^>]*>?/gm, ''),
+        admin1: (r.address.county || r.address.state || '').replace(/<[^>]*>?/gm, ''),
+        country: (r.address.country || '').replace(/<[^>]*>?/gm, ''),
         latitude: parseFloat(r.lat),
         longitude: parseFloat(r.lon),
-        fullName: r.display_name
+        fullName: r.display_name.replace(/<[^>]*>?/gm, '')
       }));
       
       setSearchResults(mapped);
