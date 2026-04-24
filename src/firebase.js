@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getAnalytics, logEvent } from 'firebase/analytics';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -15,17 +16,22 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const analytics = typeof window !== 'undefined' ? getAnalytics(app) : null;
 
 setPersistence(auth, browserLocalPersistence).catch(err => console.error("Persistence Error:", err));
 
+export const logAnalyticsEvent = (name, params) => {
+  if (analytics) {
+    logEvent(analytics, name, params);
+  }
+};
+
 export const clearSensitiveData = async () => {
   try {
-    // Terminates Firestore and clears local data
     await db.terminate();
-    // In a real multi-user app, you might also clear indexedDB directly here
   } catch (e) {
     console.error("Cache clear failed:", e);
   }
 };
 
-export { app, auth, db };
+export { app, auth, db, analytics };
