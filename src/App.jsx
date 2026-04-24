@@ -206,24 +206,106 @@ export default function App() {
 
         {showConfig && (
           <div className="bg-[#252630] p-5 rounded-xl border border-slate-700 shadow-lg animate-in fade-in slide-in-from-top-4 space-y-6">
-            <div className="space-y-3 pb-4 border-b border-slate-700/50">
-              <h4 className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2"><MapPin className="w-3 h-3" /> System Location</h4>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                <input type="text" value={addressQuery} onChange={(e) => searchAddress(e.target.value)} placeholder="Search address or city..." className="w-full pl-10 pr-4 py-2.5 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white focus:border-indigo-500 outline-none" />
-                {searchLoading && <Activity className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-500 animate-spin" />}
-                {searchResults.length > 0 && (
-                  <div className="absolute z-50 mt-2 w-full bg-[#1a1b23] border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
-                    {searchResults.map((res) => (
-                      <button key={res.id} onClick={() => selectLocation(res)} className="w-full px-4 py-3 text-left text-sm text-slate-300 hover:bg-indigo-600/20 hover:text-white border-b border-slate-800 last:border-0 flex items-center gap-3"><Navigation className="w-3 h-3 text-indigo-400" /><div><div className="font-bold">{res.name}</div><div className="text-[10px] text-slate-500">{res.admin1 ? res.admin1 + ', ' : ''}{res.country}</div></div></button>
-                    ))}
+
+            {/* LOCATION HUB */}
+            <div className="space-y-4 pb-6 border-b border-slate-700/50">
+              <div className="flex items-center justify-between">
+                <h4 className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
+                  <MapPin className="w-3 h-3" /> System Location
+                </h4>
+                <div className="flex bg-[#1a1b23] p-0.5 rounded-lg border border-slate-800">
+                  {['search', 'plus', 'manual'].map(mode => (
+                    <button 
+                      key={mode} 
+                      onClick={() => setLocationMode(mode)}
+                      className={`px-2 py-1 text-[8px] font-black uppercase rounded-md transition-all ${locationMode === mode ? 'bg-indigo-600 text-white' : 'text-slate-600'}`}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {locationMode === 'search' && (
+                <div className="relative animate-in fade-in slide-in-from-left-2">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <input 
+                    type="text" 
+                    value={addressQuery}
+                    onChange={(e) => searchAddress(e.target.value)}
+                    placeholder="Search address, Eircode, or city..."
+                    className="w-full pl-10 pr-4 py-2.5 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white focus:border-indigo-500 outline-none"
+                  />
+                  {searchLoading && <Activity className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-500 animate-spin" />}
+                  {searchResults.length > 0 && (
+                    <div className="absolute z-50 mt-2 w-full bg-[#1a1b23] border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
+                      {searchResults.map((res) => (
+                        <button key={res.id} onClick={() => selectLocation(res)} className="w-full px-4 py-3 text-left text-sm text-slate-300 hover:bg-indigo-600/20 hover:text-white border-b border-slate-800 last:border-0 transition-colors flex items-center gap-3">
+                          <Navigation className="w-3 h-3 text-indigo-400" />
+                          <div>
+                            <div className="font-bold">{res.name}</div>
+                            <div className="text-[10px] text-slate-500">{res.admin1 ? res.admin1 + ', ' : ''}{res.country}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {locationMode === 'plus' && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-left-2">
+                  <div className="relative">
+                    <Zap className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-400" />
+                    <input 
+                      type="text" 
+                      placeholder="Paste Google Plus Code (e.g. 8FWM7W3R+GV)"
+                      onBlur={(e) => { if(e.target.value) searchAddress(e.target.value); }}
+                      className="w-full pl-10 pr-4 py-2.5 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white focus:border-indigo-500 outline-none"
+                    />
                   </div>
-                )}
+                  <p className="text-[9px] text-slate-500 leading-tight">Pro tip: Plus Codes work globally and are found in Google Maps "Dropped Pin" info.</p>
+                </div>
+              )}
+
+              {locationMode === 'manual' && (
+                <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-left-2">
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Latitude</label>
+                    <input 
+                      type="number" 
+                      value={manualCoords.lat}
+                      onChange={(e) => setManualCoords({ ...manualCoords, lat: parseFloat(e.target.value) })}
+                      className="w-full px-3 py-2 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Longitude</label>
+                    <input 
+                      type="number" 
+                      value={manualCoords.long}
+                      onChange={(e) => setManualCoords({ ...manualCoords, long: parseFloat(e.target.value) })}
+                      className="w-full px-3 py-2 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white font-mono"
+                    />
+                  </div>
+                  <button 
+                    onClick={() => selectLocation({ latitude: manualCoords.lat, longitude: manualCoords.long, name: "Manual Location", country: "User Set" })}
+                    className="col-span-2 py-2 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 text-[10px] font-bold rounded-lg border border-indigo-500/30 transition-all"
+                  >
+                    APPLY COORDINATES
+                  </button>
+                </div>
+              )}
+
+              <div className="flex items-center gap-4 text-[10px] text-slate-400 font-mono bg-[#1a1b23] p-2 rounded-lg border border-slate-800/50">
+                <div className="flex items-center gap-1"><span className="text-slate-600">LAT:</span> <span className="text-white">{config.lat?.toFixed(4)}</span></div>
+                <div className="flex items-center gap-1"><span className="text-slate-600">LON:</span> <span className="text-white">{config.long?.toFixed(4)}</span></div>
+                {config.locationName && <div className="ml-auto text-indigo-400 italic truncate max-w-[150px]">{config.locationName}</div>}
               </div>
             </div>
+
             <div className="flex justify-between items-center border-b border-slate-700 pb-4">
-              <h3 className="font-semibold text-white text-sm flex items-center gap-2"><Calculator className="w-4 h-4 text-amber-400" /> String Configuration</h3>
-              <div className="flex items-center gap-4"><div className="flex items-center gap-2"><label className="text-[10px] text-slate-400 uppercase font-bold">Eff.</label><input type="number" value={config.eff * 100} onChange={e => saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 })} className="w-14 p-1 bg-[#1a1b23] border border-slate-600 rounded text-white text-xs font-mono" /></div><button onClick={addString} className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold flex items-center gap-1"><Plus className="w-3 h-3" /> Add</button></div>
+              <h3 className="font-semibold text-white text-sm flex items-center gap-2"><Calculator className="w-4 h-4 text-amber-400" /> String Configuration</h3>              <div className="flex items-center gap-4"><div className="flex items-center gap-2"><label className="text-[10px] text-slate-400 uppercase font-bold">Eff.</label><input type="number" value={config.eff * 100} onChange={e => saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 })} className="w-14 p-1 bg-[#1a1b23] border border-slate-600 rounded text-white text-xs font-mono" /></div><button onClick={addString} className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold flex items-center gap-1"><Plus className="w-3 h-3" /> Add</button></div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {(config.strings || []).map((s, idx) => (
