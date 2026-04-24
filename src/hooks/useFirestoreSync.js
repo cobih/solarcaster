@@ -4,32 +4,33 @@ import { db } from '../firebase';
 import { sanitizeConfig } from '../utils/sanitize';
 
 export const useFirestoreSync = (user, appId) => {
+  const isDemo = user?.uid === 'demo-user';
+  
   const [dbSyncing, setDbSyncing] = useState(false);
-  const [dbStatus, setDbStatus] = useState("Idle");
+  const [dbStatus, setDbStatus] = useState(isDemo ? "Demo Mode" : "Idle");
   const [lastSynced, setLastSynced] = useState(null);
 
   const [config, setConfig] = useState({
-    lat: null,
-    long: null,
+    lat: isDemo ? 53.3498 : null,
+    long: isDemo ? -6.2603 : null,
     eff: 0.85,
     schemaVersion: 2,
-    locationSet: false,
-    arraysSet: false,
-    strings: [],
-    effHistory: [], // Track efficiency changes over time
-    apiEnabled: false, // For external integrations
+    locationSet: isDemo,
+    arraysSet: isDemo,
+    locationName: isDemo ? "Dublin City (Demo)" : "",
+    strings: isDemo ? [
+      { id: 'd1', name: "Main Roof (South)", azimuth: 180, tilt: 35, count: 12, wattage: 400 }
+    ] : [],
+    effHistory: [],
+    apiEnabled: false,
   });
 
-  const [actuals, setActuals] = useState({});
+  const [actuals, setActuals] = useState(isDemo ? {
+    [new Date().toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })]: 14.5
+  } : {});
 
   useEffect(() => {
-    if (!user) {
-      setTimeout(() => {
-        setDbSyncing(false);
-        setDbStatus("Idle");
-      }, 0);
-      return;
-    }
+    if (!user || isDemo) return;
 
     const statusTimer = setTimeout(() => setDbStatus("Connecting..."), 0);
     const timeoutId = setTimeout(() => setDbSyncing(false), 5000);
@@ -39,27 +40,14 @@ export const useFirestoreSync = (user, appId) => {
       clearTimeout(timeoutId);
       if (docSnap.exists()) {
         const data = docSnap.data();
-        
-        // Advanced Migration: Ensure all new fields are present
         const migrated = { ...data };
         if (data.lat !== undefined && data.long !== undefined) migrated.locationSet = true;
         if (!data.effHistory) migrated.effHistory = [];
         if (data.apiEnabled === undefined) migrated.apiEnabled = false;
-        
         if (data.strings && data.strings.length > 0) {
            migrated.arraysSet = true;
            migrated.strings = data.strings.map(s => ({ ...s, wattage: s.wattage || 465 }));
         }
-        
-        // Legacy multi-string migration
-        if (!data.strings && data.eastCount !== undefined) {
-          migrated.strings = [
-            { id: 's1', name: "East String", azimuth: 90, tilt: data.tilt || 35, count: data.eastCount || 0, wattage: 465 },
-            { id: 's2', name: "West String", azimuth: 270, tilt: data.tilt || 35, count: data.westCount || 0, wattage: 465 }
-          ];
-          migrated.arraysSet = true;
-        }
-        
         setConfig(migrated);
       }
       setDbSyncing(false);
@@ -81,7 +69,7 @@ export const useFirestoreSync = (user, appId) => {
       clearTimeout(timeoutId);
       clearTimeout(statusTimer);
     };
-  }, [user, appId]);
+  }, [user, appId, isDemo]);
 
   const saveConfigToCloud = async (newConfig) => {
     const cleanConfig = sanitizeConfig(newConfig);
@@ -94,7 +82,9 @@ export const useFirestoreSync = (user, appId) => {
       cleanConfig.effHistory = [historyEntry, ...(config.effHistory || [])].slice(0, 50);
     }
     setConfig(cleanConfig);
-    if (!user) return;
+    
+    if (!user || isDemo) return;
+    
     setDbStatus("Saving Config...");
     try {
       const configRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'config');
@@ -110,7 +100,9 @@ export const useFirestoreSync = (user, appId) => {
   const saveActualToCloud = async (dayLabel, value) => {
     const newVal = { ...actuals, [dayLabel]: value };
     setActuals(newVal);
-    if (!user) return;
+    
+    if (!user || isDemo) return;
+    
     setDbStatus(`Saving Actual: ${dayLabel}`);
     try {
       const actualsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'actuals');
@@ -124,7 +116,7 @@ export const useFirestoreSync = (user, appId) => {
   };
 
   const publishForecast = async (dailyTotals) => {
-    if (!user || !config.apiEnabled) return;
+    if (!user || !config.apiEnabled || isDemo) return;
     try {
       const publicRef = doc(db, 'public_forecasts', user.uid);
       const summary = dailyTotals.map(d => ({
