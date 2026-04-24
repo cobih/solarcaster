@@ -56,7 +56,7 @@ export const useSolarPhysics = (config, dbSyncing) => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (dbSyncing) return;
+    if (dbSyncing || !config.lat || !config.long) return;
 
     const fetchSolarData = async () => {
       setLoading(true);

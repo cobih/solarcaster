@@ -9,14 +9,13 @@ export const useFirestoreSync = (user, appId) => {
   const [lastSynced, setLastSynced] = useState(null);
 
   const [config, setConfig] = useState({
-    lat: 53.3767,
-    long: -6.3286,
+    lat: null,
+    long: null,
     eff: 0.85,
-    schemaVersion: 2, // Track schema for safe migrations
-    strings: [
-      { id: 's1', name: "East String", azimuth: 90, tilt: 35, count: 11 },
-      { id: 's2', name: "West String", azimuth: 270, tilt: 35, count: 9 }
-    ],
+    schemaVersion: 2,
+    locationSet: false,
+    arraysSet: false,
+    strings: [],
   });
 
   const [actuals, setActuals] = useState({});
@@ -39,18 +38,18 @@ export const useFirestoreSync = (user, appId) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
         
-        // Advanced Migration: Ensure lat/long and multi-string format are present
+        // Advanced Migration: Ensure all new flags are present
         const migrated = { ...data };
-        if (!data.lat) migrated.lat = 53.3767;
-        if (!data.long) migrated.long = -6.3286;
+        if (data.lat !== undefined && data.long !== undefined) migrated.locationSet = true;
+        if (data.strings && data.strings.length > 0) migrated.arraysSet = true;
         
+        // Legacy multi-string migration (if needed)
         if (!data.strings && data.eastCount !== undefined) {
-          console.log("Migrating legacy config to multi-string...");
           migrated.strings = [
             { id: 's1', name: "East String", azimuth: 90, tilt: data.tilt || 35, count: data.eastCount || 0 },
             { id: 's2', name: "West String", azimuth: 270, tilt: data.tilt || 35, count: data.westCount || 0 }
           ];
-          migrated.eff = data.eff || 0.85;
+          migrated.arraysSet = true;
         }
         
         setConfig(migrated);

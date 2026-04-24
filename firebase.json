@@ -6,6 +6,7 @@
     "indexes": "firestore.indexes.json"
   },
   "hosting": {
+    "site": "solar-forecaster-63320",
     "public": "dist",
     "ignore": [
       "firebase.json",

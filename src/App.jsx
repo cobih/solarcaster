@@ -7,7 +7,7 @@ import {
   Sun, Calendar, Settings, AlertCircle, Info, Target, Calculator, Zap, Cloud,
   LogOut, LogIn, User, Plus, Trash2, Activity,
   MapPin, Search, Navigation, LayoutDashboard, TrendingUp, History, CloudRain,
-  Crosshair, ChevronDown, ChevronUp, MessageSquare
+  Crosshair, ChevronDown, ChevronUp, MessageSquare, ArrowRight
 } from 'lucide-react';
 
 import { useSolarAuth } from './hooks/useSolarAuth';
@@ -37,6 +37,9 @@ export default function App() {
   const [selectedDayLabel, setSelectedDayLabel] = useState("");
   const [expandedForecastDay, setExpandedForecastDay] = useState(null);
   const [activeTab, setActiveTab] = useState("today"); // 'today', 'forecast', 'history'
+  
+  // Onboarding States
+  const [onboardingStep, setOnboardingStep] = useState(1); // 1: Location, 2: Arrays
   const [addressQuery, setAddressQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -257,51 +260,120 @@ export default function App() {
     );
   }
 
-  // --- 4. FIRST-TIME SETUP ---
-  if (!config.locationSet) {
+  // --- 4. SYSTEM CALIBRATION (ONBOARDING) ---
+  if (!config.locationSet || !config.arraysSet) {
     return (
-      <div className="min-h-screen bg-[#1a1b23] p-6 flex items-center justify-center">
+      <div className="min-h-screen bg-[#1a1b23] p-6 flex items-center justify-center overflow-x-hidden">
         <div className="max-w-xl w-full space-y-8 animate-in fade-in zoom-in-95 duration-500">
+          
+          {/* STEP INDICATOR */}
+          <div className="flex items-center justify-center gap-4 mb-2">
+            {[1, 2].map(s => (
+              <div key={s} className={`h-1 flex-1 rounded-full transition-all duration-500 ${onboardingStep >= s ? 'bg-indigo-500' : 'bg-slate-800'}`} />
+            ))}
+          </div>
+
           <div className="text-center">
-            <div className="w-16 h-16 bg-indigo-600/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <MapPin className="w-8 h-8 text-indigo-500" />
-            </div>
-            <h2 className="text-3xl font-black text-white">Set Your Location</h2>
-            <p className="text-slate-400 mt-2">We need your coordinates to calculate the sun's position for your roof.</p>
+            <h2 className="text-3xl font-black text-white">System Calibration</h2>
+            <p className="text-slate-400 mt-2">
+              {onboardingStep === 1 ? "Step 1: Your Unique Location" : "Step 2: Your Panel Arrays"}
+            </p>
           </div>
 
           <div className="bg-[#252630] p-6 rounded-3xl border border-slate-700 shadow-2xl space-y-6">
-            <div className="flex bg-[#1a1b23] p-1 rounded-xl border border-slate-800">
-              {['gps', 'search', 'manual'].map(mode => (
-                <button key={mode} onClick={() => setLocationMode(mode)} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${locationMode === mode ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-600'}`}>
-                  {mode}
-                </button>
-              ))}
-            </div>
+            
+            {/* STEP 1: LOCATION */}
+            {onboardingStep === 1 && (
+              <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+                <div className="flex bg-[#1a1b23] p-1 rounded-xl border border-slate-800">
+                  {['gps', 'search', 'manual'].map(mode => (
+                    <button key={mode} onClick={() => setLocationMode(mode)} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${locationMode === mode ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-600'}`}>
+                      {mode}
+                    </button>
+                  ))}
+                </div>
 
-            {locationMode === 'gps' && (
-              <button onClick={detectLocation} disabled={searchLoading} className="w-full py-12 bg-indigo-600/10 hover:bg-indigo-600/20 border-2 border-dashed border-indigo-500/30 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all group">
-                <Crosshair className={`w-12 h-12 ${searchLoading ? 'animate-spin text-indigo-400' : 'text-indigo-500 group-hover:scale-110 transition-transform'}`} />
-                <span className="text-sm font-bold text-indigo-400 uppercase tracking-widest">{searchLoading ? "Locating..." : "Use Current GPS"}</span>
-              </button>
-            )}
+                {locationMode === 'gps' && (
+                  <button onClick={detectLocation} disabled={searchLoading} className="w-full py-12 bg-indigo-600/10 hover:bg-indigo-600/20 border-2 border-dashed border-indigo-500/30 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all group">
+                    <Crosshair className={`w-12 h-12 ${searchLoading ? 'animate-spin text-indigo-400' : 'text-indigo-500 group-hover:scale-110 transition-transform'}`} />
+                    <span className="text-sm font-bold text-indigo-400 uppercase tracking-widest">{searchLoading ? "Locating..." : "Use Current GPS"}</span>
+                  </button>
+                )}
 
-            {locationMode === 'search' && (
-              <div className="relative"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" /><input type="text" value={addressQuery} onChange={(e) => searchAddress(e.target.value)} placeholder="Search address or Eircode..." className="w-full pl-12 pr-4 py-4 bg-[#1a1b23] border border-slate-600 rounded-2xl text-white focus:border-indigo-500 outline-none shadow-inner" />
-                {searchLoading && <Activity className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-indigo-500 animate-spin" />}
-                {searchResults.length > 0 && (<div className="absolute z-50 mt-2 w-full bg-[#1a1b23] border border-slate-700 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">{searchResults.map((res) => (<button key={res.id} onClick={() => selectLocation(res)} className="w-full px-5 py-4 text-left hover:bg-indigo-600/20 border-b border-slate-800 last:border-0 transition-colors flex items-center gap-4"><Navigation className="w-4 h-4 text-indigo-400" /><div><div className="font-bold text-white">{res.name}</div><div className="text-[10px] text-slate-500">{res.fullName}</div></div></button>))}</div>)}
+                {locationMode === 'search' && (
+                  <div className="relative"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" /><input type="text" value={addressQuery} onChange={(e) => searchAddress(e.target.value)} placeholder="Search address or Eircode..." className="w-full pl-12 pr-4 py-4 bg-[#1a1b23] border border-slate-600 rounded-2xl text-white focus:border-indigo-500 outline-none shadow-inner" />
+                    {searchLoading && <Activity className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-indigo-500 animate-spin" />}
+                    {searchResults.length > 0 && (<div className="absolute z-50 mt-2 w-full bg-[#1a1b23] border border-slate-700 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">{searchResults.map((res) => (<button key={res.id} onClick={() => selectLocation(res)} className="w-full px-5 py-4 text-left hover:bg-indigo-600/20 border-b border-slate-800 last:border-0 transition-colors flex items-center gap-4"><Navigation className="w-4 h-4 text-indigo-400" /><div><div className="font-bold text-white">{res.name}</div><div className="text-[10px] text-slate-500">{res.fullName}</div></div></button>))}</div>)}
+                  </div>
+                )}
+
+                {locationMode === 'manual' && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-2 ml-1">Latitude</label><input type="number" value={manualCoords.lat} onChange={(e) => setManualCoords({ ...manualCoords, lat: parseFloat(e.target.value) })} className="w-full px-4 py-3 bg-[#1a1b23] border border-slate-600 rounded-xl text-white font-mono" /></div>
+                    <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-2 ml-1">Longitude</label><input type="number" value={manualCoords.long} onChange={(e) => setManualCoords({ ...manualCoords, long: parseFloat(e.target.value) })} className="w-full px-4 py-3 bg-[#1a1b23] border border-slate-600 rounded-xl text-white font-mono" /></div>
+                    <button onClick={() => selectLocation({ latitude: manualCoords.lat, longitude: manualCoords.long, name: "Manual Location", country: "User Set" })} className="col-span-2 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-lg transition-all active:scale-95 uppercase tracking-widest">Apply Coordinates</button>
+                  </div>
+                )}
+
+                {config.locationSet && (
+                  <button 
+                    onClick={() => setOnboardingStep(2)}
+                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl flex items-center justify-center gap-2 shadow-xl animate-bounce"
+                  >
+                    Next: Setup Panel Arrays <ArrowRight className="w-5 h-5" />
+                  </button>
+                )}
               </div>
             )}
 
-            {locationMode === 'manual' && (
-              <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-2 ml-1">Latitude</label><input type="number" value={manualCoords.lat} onChange={(e) => setManualCoords({ ...manualCoords, lat: parseFloat(e.target.value) })} className="w-full px-4 py-3 bg-[#1a1b23] border border-slate-600 rounded-xl text-white font-mono" /></div>
-                <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-2 ml-1">Longitude</label><input type="number" value={manualCoords.long} onChange={(e) => setManualCoords({ ...manualCoords, long: parseFloat(e.target.value) })} className="w-full px-4 py-3 bg-[#1a1b23] border border-slate-600 rounded-xl text-white font-mono" /></div>
-                <button onClick={() => selectLocation({ latitude: manualCoords.lat, longitude: manualCoords.long, name: "Manual Location", country: "User Set" })} className="col-span-2 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-lg transition-all active:scale-95">CONFIRM COORDINATES</button>
+            {/* STEP 2: ARRAYS */}
+            {onboardingStep === 2 && (
+              <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2"><Calculator className="w-4 h-4 text-amber-400" /> Define Strings</h3>
+                  <button onClick={addString} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center gap-2 transition-all"><Plus className="w-3 h-3" /> Add String</button>
+                </div>
+
+                <div className="max-h-[300px] overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+                  {config.strings.length === 0 && (
+                    <div className="py-12 text-center border-2 border-dashed border-slate-800 rounded-2xl">
+                      <p className="text-xs text-slate-600 font-bold uppercase tracking-widest">No strings added yet</p>
+                    </div>
+                  )}
+                  {config.strings.map((s, idx) => (
+                    <div key={s.id} className="p-4 bg-[#1a1b23] rounded-2xl border border-slate-700 relative group animate-in slide-in-from-bottom-2">
+                      <button onClick={() => removeString(s.id)} className="absolute top-3 right-3 text-slate-600 hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="col-span-2">
+                          <label className="block text-[9px] font-black text-slate-500 uppercase mb-1">String Name</label>
+                          <input type="text" value={s.name} onChange={e => updateString(s.id, 'name', e.target.value)} className="w-full bg-transparent border-b border-slate-800 focus:border-indigo-500 outline-none text-white font-bold" />
+                        </div>
+                        <div><label className="block text-[9px] font-black text-slate-500 uppercase mb-1">Panel Count</label><input type="number" value={s.count} onChange={e => updateString(s.id, 'count', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-2 text-white" /></div>
+                        <div><label className="block text-[9px] font-black text-slate-500 uppercase mb-1">Azimuth (°)</label><input type="number" value={s.azimuth} onChange={e => updateString(s.id, 'azimuth', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-2 text-white" /></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {config.strings.length > 0 && (
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center text-xs text-slate-400 px-2">
+                      <span>Total System Capacity:</span>
+                      <strong className="text-white text-lg font-black">{totalCapacity.toFixed(2)} <span className="text-xs font-normal text-slate-500">kWp</span></strong>
+                    </div>
+                    <button 
+                      onClick={() => saveConfigToCloud({ ...config, arraysSet: true })}
+                      className="w-full py-5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl flex items-center justify-center gap-3 shadow-xl transition-all active:scale-95"
+                    >
+                      <Zap className="w-6 h-6 animate-pulse" /> FINISH CALIBRATION
+                    </button>
+                    <button onClick={() => setOnboardingStep(1)} className="w-full py-2 text-[10px] text-slate-600 font-bold uppercase hover:text-slate-400 transition-colors">Back to location</button>
+                  </div>
+                )}
               </div>
             )}
             
-            <p className="text-center text-[10px] text-slate-500 font-medium italic">You can change this anytime in the parameters panel.</p>
+            <p className="text-center text-[10px] text-slate-500 font-medium italic">Everything is saved securely to your private cloud profile.</p>
           </div>
         </div>
       </div>
