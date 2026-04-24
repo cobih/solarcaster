@@ -6,7 +6,7 @@ import {
 import {
   Sun, Calendar, Settings, AlertCircle, Info, Target, Calculator, Zap, Cloud,
   LogOut, LogIn, User, Plus, Trash2, Activity,
-  MapPin, Search, Navigation
+  MapPin, Search, Navigation, LayoutDashboard, TrendingUp, History
 } from 'lucide-react';
 
 import { useSolarAuth } from './hooks/useSolarAuth';
@@ -27,58 +27,11 @@ export default function App() {
 
   const [showConfig, setShowConfig] = useState(false);
   const [selectedDayLabel, setSelectedDayLabel] = useState("");
+  const [activeTab, setActiveTab] = useState("today"); // 'today', 'forecast', 'history'
   const [addressQuery, setAddressQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
-
   const [lastSearchTime, setLastSearchTime] = useState(0);
-
-  const searchAddress = async (q) => {
-    setAddressQuery(q);
-    if (q.length < 3) {
-      setSearchResults([]);
-      return;
-    }
-
-    // Rate Limiting: Max 1 search every 500ms
-    const now = Date.now();
-    if (now - lastSearchTime < 500) return;
-    setLastSearchTime(now);
-
-    setSearchLoading(true);
-    try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=5`);
-      const results = await res.json();
-      
-      const mapped = results.map(r => ({
-        id: r.place_id,
-        // Basic sanitization: Ensure we only take the first segment and remove any HTML tags
-        name: (r.display_name.split(',')[0] || "").replace(/<[^>]*>?/gm, ''),
-        admin1: (r.address.county || r.address.state || '').replace(/<[^>]*>?/gm, ''),
-        country: (r.address.country || '').replace(/<[^>]*>?/gm, ''),
-        latitude: parseFloat(r.lat),
-        longitude: parseFloat(r.lon),
-        fullName: r.display_name.replace(/<[^>]*>?/gm, '')
-      }));
-      
-      setSearchResults(mapped);
-    } catch (err) {
-      console.error("Geocoding error:", err);
-    } finally {
-      setSearchLoading(false);
-    }
-  };
-
-  const selectLocation = (res) => {
-    saveConfigToCloud({ 
-      ...config, 
-      lat: res.latitude, 
-      long: res.longitude,
-      locationName: res.name + (res.admin1 ? ', ' + res.admin1 : '')
-    });
-    setSearchResults([]);
-    setAddressQuery("");
-  };
 
   const [visibleSeries, setVisibleSeries] = useState({
     total: true,
@@ -90,6 +43,8 @@ export default function App() {
   const toggleSeries = (key) => {
     setVisibleSeries(prev => ({ ...prev, [key]: !prev[key] }));
   };
+
+  const STRING_COLORS = ['#f59e0b', '#ef4444', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'];
 
   const maxKw = data.length > 0 ? Math.max(...data.map(d => d.total)) : 0;
   const todayForecast = dailyTotals.find(d => d.dayOffset === 0) || { yield: 0, eastYield: 0, westYield: 0, dayLabel: '' };
@@ -117,7 +72,7 @@ export default function App() {
   }
   const canApply = daysEntered > 0 && Math.abs(config.eff - suggestedEff) > 0.001;
 
-  // Selected Day Drill-down
+  // Selected Day Drill-down init
   useEffect(() => {
     if (!selectedDayLabel && dailyTotals.length > 0) {
       const today = dailyTotals.find(d => d.dayOffset === 0);
@@ -125,27 +80,54 @@ export default function App() {
     }
   }, [dailyTotals, selectedDayLabel]);
 
-  const selectedDayData = data.filter(d => d.dayLabel === selectedDayLabel);
-  const selectedDaySummary = dailyTotals.find(d => d.dayLabel === selectedDayLabel);
-  const currentHourTick = nowLabel && nowLabel.startsWith(selectedDayLabel) ? nowLabel.replace(selectedDayLabel + ' ', '') : null;
+  const searchAddress = async (q) => {
+    setAddressQuery(q);
+    if (q.length < 3) {
+      setSearchResults([]);
+      return;
+    }
+    const now = Date.now();
+    if (now - lastSearchTime < 500) return;
+    setLastSearchTime(now);
+    setSearchLoading(true);
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=5`);
+      const results = await res.json();
+      const mapped = results.map(r => ({
+        id: r.place_id,
+        name: (r.display_name.split(',')[0] || "").replace(/<[^>]*>?/gm, ''),
+        admin1: (r.address.county || r.address.state || '').replace(/<[^>]*>?/gm, ''),
+        country: (r.address.country || '').replace(/<[^>]*>?/gm, ''),
+        latitude: parseFloat(r.lat),
+        longitude: parseFloat(r.lon),
+        fullName: r.display_name.replace(/<[^>]*>?/gm, '')
+      }));
+      setSearchResults(mapped);
+    } catch (err) {
+      console.error("Geocoding error:", err);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
 
-  // String Colors for Charts
-  const STRING_COLORS = ['#f59e0b', '#ef4444', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'];
+  const selectLocation = (res) => {
+    saveConfigToCloud({ 
+      ...config, 
+      lat: res.latitude, 
+      long: res.longitude,
+      locationName: res.name + (res.admin1 ? ', ' + res.admin1 : '')
+    });
+    setSearchResults([]);
+    setAddressQuery("");
+  };
 
-  // --- STRING MANAGEMENT ---
   const addString = () => {
-    const newString = {
-      id: 's' + Date.now(),
-      name: `String ${config.strings.length + 1}`,
-      azimuth: 180,
-      tilt: 35,
-      count: 10
-    };
+    const newString = { id: 's' + Date.now(), name: `String ${config.strings.length + 1}`, azimuth: 180, tilt: 35, count: 10 };
     saveConfigToCloud({ ...config, strings: [...config.strings, newString] });
   };
 
   const removeString = (id) => {
-    if (config.strings.length <= 1) return; // Keep at least one
+    if (config.strings.length <= 1) return;
     saveConfigToCloud({ ...config, strings: config.strings.filter(s => s.id !== id) });
   };
 
@@ -154,7 +136,8 @@ export default function App() {
     saveConfigToCloud({ ...config, strings: updated });
   };
 
-  // --- UI RENDERING ---
+  const selectedDayData = data.filter(d => d.dayLabel === selectedDayLabel);
+  const currentHourTick = nowLabel && nowLabel.startsWith(selectedDayLabel) ? nowLabel.replace(selectedDayLabel + ' ', '') : null;
 
   if (authLoading) {
     return (
@@ -171,16 +154,10 @@ export default function App() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#1a1b23] p-6">
         <div className="max-w-md w-full bg-[#252630] p-8 rounded-2xl border border-slate-700 shadow-2xl text-center">
-          <div className="w-20 h-20 bg-indigo-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Sun className="w-10 h-10 text-indigo-500" />
-          </div>
+          <div className="w-20 h-20 bg-indigo-600/20 rounded-full flex items-center justify-center mx-auto mb-6"><Sun className="w-10 h-10 text-indigo-500" /></div>
           <h1 className="text-3xl font-bold text-white mb-3">Solarcaster</h1>
-          <p className="text-slate-400 mb-8 leading-relaxed">
-            Dynamic solar forecasting with cloud persistence and model auto-calibration.
-          </p>
-          <button onClick={login} className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center justify-center gap-3 transition-all font-bold text-lg shadow-lg">
-            <LogIn className="w-6 h-6" /> Sign in with Google
-          </button>
+          <p className="text-slate-400 mb-8 leading-relaxed">Dynamic solar forecasting with cloud persistence and model auto-calibration.</p>
+          <button onClick={login} className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center justify-center gap-3 transition-all font-bold text-lg shadow-lg"><LogIn className="w-6 h-6" /> Sign in with Google</button>
         </div>
       </div>
     );
@@ -191,454 +168,129 @@ export default function App() {
       <div className="flex items-center justify-center h-screen bg-[#1a1b23] text-white">
         <div className="text-center animate-pulse">
           <Sun className="w-12 h-12 mx-auto mb-4 text-[#fde047] animate-spin-slow" />
-          <h2 className="text-xl font-semibold">Calculating Sun Position & Irradiance...</h2>
+          <h2 className="text-xl font-semibold text-slate-400">Loading Solar Physics...</h2>
         </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="p-8 max-w-2xl mx-auto mt-12 bg-red-900/20 border border-red-500/50 rounded-xl text-red-200">
-        <AlertCircle className="w-8 h-8 mb-3 text-red-400" />
-        <h2 className="text-xl font-bold mb-2">Error Loading Data</h2>
-        <p>{error}</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#1a1b23] p-4 md:p-6 font-sans text-slate-200">
-      <div className="max-w-5xl mx-auto space-y-6">
+    <div className="min-h-screen bg-[#1a1b23] font-sans text-slate-200 pb-24 md:pb-6 overflow-x-hidden">
+      <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-6">
 
         {/* HEADER */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="flex justify-between items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              Solarcaster
-              <Cloud className="w-5 h-5 text-emerald-400 ml-2" aria-label="Cloud sync active" />
-            </h1>
-            <p className="text-slate-400 text-sm mt-1 flex items-center gap-1">
-              <MapPin className="w-4 h-4 text-indigo-400" aria-hidden="true" /> 
-              {config.locationName || `${config.lat?.toFixed(2)}°N, ${config.long?.toFixed(2)}°W`} • Connected as {user.email}
-            </p>
+            <h1 className="text-xl md:text-2xl font-bold text-white flex items-center gap-2">Solarcaster<Cloud className="w-4 h-4 md:w-5 md:h-5 text-emerald-400 ml-2" aria-label="Cloud sync active" /></h1>
+            <p className="text-slate-400 text-[10px] md:text-sm mt-1 flex items-center gap-1"><MapPin className="w-3 h-3 text-indigo-400" aria-hidden="true" /> {config.locationName || `${config.lat?.toFixed(2)}°N, ${config.long?.toFixed(2)}°W`}</p>
           </div>
-          <div className="flex items-center gap-3 w-full md:w-auto">
-            <button 
-              onClick={() => setShowConfig(!showConfig)} 
-              className={`relative px-4 py-2 bg-[#252630] hover:bg-[#2d2e3a] border ${canApply ? 'border-amber-500/50 text-amber-400' : 'border-slate-700 text-slate-300'} rounded-lg flex items-center gap-2 transition-colors text-sm font-medium shadow-sm`}
-            >
+          <div className="flex items-center gap-2 md:gap-3">
+            <button onClick={() => setShowConfig(!showConfig)} className={`relative p-2 md:px-4 md:py-2 bg-[#252630] hover:bg-[#2d2e3a] border ${canApply ? 'border-amber-500/50 text-amber-400' : 'border-slate-700 text-slate-300'} rounded-lg flex items-center gap-2 transition-colors text-sm font-medium shadow-sm`}>
               {canApply ? <Activity className="w-4 h-4 animate-pulse" /> : <Settings className="w-4 h-4" />}
-              Parameters
+              <span className="hidden md:inline">Parameters</span>
               {canApply && <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full border-2 border-[#1a1b23]"></span>}
             </button>
-            <div className="flex items-center gap-2 bg-[#252630] p-1 pr-3 rounded-full border border-slate-700 shadow-sm">
-              {user.photoURL ? (
-                <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full border border-slate-600" />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center"><User className="w-4 h-4 text-slate-400" /></div>
-              )}
-              <button onClick={logout} className="text-slate-400 hover:text-white transition-colors"><LogOut className="w-4 h-4" /></button>
+            <div className="flex items-center gap-2 bg-[#252630] p-1 md:pr-3 rounded-full border border-slate-700 shadow-sm">
+              {user.photoURL ? <img src={user.photoURL} alt="Profile" className="w-7 h-7 md:w-8 md:h-8 rounded-full border border-slate-600" /> : <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-slate-700 flex items-center justify-center"><User className="w-3 h-3 md:w-4 md:h-4 text-slate-400" /></div>}
+              <button onClick={logout} className="hidden md:block text-slate-400 hover:text-white transition-colors ml-1"><LogOut className="w-4 h-4" /></button>
             </div>
           </div>
         </div>
 
-        {/* CONFIG PANEL */}
         {showConfig && (
           <div className="bg-[#252630] p-5 rounded-xl border border-slate-700 shadow-lg animate-in fade-in slide-in-from-top-4 space-y-6">
-            
-            {/* LOCATION SEARCH SECTION */}
             <div className="space-y-3 pb-4 border-b border-slate-700/50">
-              <h4 className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
-                <MapPin className="w-3 h-3" /> System Location
-              </h4>
+              <h4 className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2"><MapPin className="w-3 h-3" /> System Location</h4>
               <div className="relative">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                  <input 
-                    type="text" 
-                    value={addressQuery}
-                    onChange={(e) => searchAddress(e.target.value)}
-                    placeholder="Search address or city..."
-                    className="w-full pl-10 pr-4 py-2.5 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white focus:border-indigo-500 outline-none transition-all"
-                  />
-                  {searchLoading && <Activity className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-500 animate-spin" />}
-                </div>
-
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <input type="text" value={addressQuery} onChange={(e) => searchAddress(e.target.value)} placeholder="Search address or city..." className="w-full pl-10 pr-4 py-2.5 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white focus:border-indigo-500 outline-none" />
+                {searchLoading && <Activity className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-500 animate-spin" />}
                 {searchResults.length > 0 && (
                   <div className="absolute z-50 mt-2 w-full bg-[#1a1b23] border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
                     {searchResults.map((res) => (
-                      <button 
-                        key={res.id} 
-                        onClick={() => selectLocation(res)}
-                        className="w-full px-4 py-3 text-left text-sm text-slate-300 hover:bg-indigo-600/20 hover:text-white border-b border-slate-800 last:border-0 transition-colors flex items-center gap-3"
-                      >
-                        <Navigation className="w-3 h-3 text-indigo-400" />
-                        <div>
-                          <div className="font-bold">{res.name}</div>
-                          <div className="text-[10px] text-slate-500">{res.admin1 ? res.admin1 + ', ' : ''}{res.country}</div>
-                        </div>
-                      </button>
+                      <button key={res.id} onClick={() => selectLocation(res)} className="w-full px-4 py-3 text-left text-sm text-slate-300 hover:bg-indigo-600/20 hover:text-white border-b border-slate-800 last:border-0 flex items-center gap-3"><Navigation className="w-3 h-3 text-indigo-400" /><div><div className="font-bold">{res.name}</div><div className="text-[10px] text-slate-500">{res.admin1 ? res.admin1 + ', ' : ''}{res.country}</div></div></button>
                     ))}
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-4 text-[11px] text-slate-400 font-mono bg-[#1a1b23] p-2 rounded-lg border border-slate-800/50">
-                <div className="flex items-center gap-1"><span className="text-slate-600">LAT:</span> <span className="text-white">{config.lat?.toFixed(4)}</span></div>
-                <div className="flex items-center gap-1"><span className="text-slate-600">LON:</span> <span className="text-white">{config.long?.toFixed(4)}</span></div>
-                {config.locationName && <div className="ml-auto text-indigo-400 italic truncate max-w-[200px]">{config.locationName}</div>}
-              </div>
             </div>
-
             <div className="flex justify-between items-center border-b border-slate-700 pb-4">
               <h3 className="font-semibold text-white text-sm flex items-center gap-2"><Calculator className="w-4 h-4 text-amber-400" /> String Configuration</h3>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                   <label className="text-[10px] text-slate-400 uppercase font-bold">System Efficiency</label>
-                   <input type="number" value={config.eff * 100} onChange={e => saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 })}
-                    className="w-16 p-1 bg-[#1a1b23] border border-slate-600 rounded text-white text-xs font-mono" />
-                   <span className="text-xs text-slate-500">%</span>
-                </div>
-                <button onClick={addString} className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold flex items-center gap-1 transition-colors">
-                  <Plus className="w-3 h-3" /> Add String
-                </button>
-              </div>
+              <div className="flex items-center gap-4"><div className="flex items-center gap-2"><label className="text-[10px] text-slate-400 uppercase font-bold">Eff.</label><input type="number" value={config.eff * 100} onChange={e => saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 })} className="w-14 p-1 bg-[#1a1b23] border border-slate-600 rounded text-white text-xs font-mono" /></div><button onClick={addString} className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold flex items-center gap-1"><Plus className="w-3 h-3" /> Add</button></div>
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {(config.strings || []).map((s, idx) => (
-                <div key={s.id} className="p-4 bg-[#1a1b23] rounded-lg border border-slate-700 relative group">
-                  <button onClick={() => removeString(s.id)} className="absolute top-2 right-2 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="col-span-2">
-                      <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">String Name</label>
-                      <input type="text" value={s.name} onChange={e => updateString(s.id, 'name', e.target.value)}
-                        className="w-full bg-transparent border-b border-slate-700 focus:border-indigo-500 outline-none text-sm text-white py-1" />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Panels (465W)</label>
-                      <input type="number" value={s.count} onChange={e => updateString(s.id, 'count', Number(e.target.value))}
-                        className="w-full bg-[#252630] border border-slate-700 rounded px-2 py-1 text-sm text-white outline-none focus:border-indigo-500" />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Azimuth (°)</label>
-                      <input type="number" value={s.azimuth} onChange={e => updateString(s.id, 'azimuth', Number(e.target.value))}
-                        className="w-full bg-[#252630] border border-slate-700 rounded px-2 py-1 text-sm text-white outline-none focus:border-indigo-500" />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Tilt (°)</label>
-                      <input type="number" value={s.tilt} onChange={e => updateString(s.id, 'tilt', Number(e.target.value))}
-                        className="w-full bg-[#252630] border border-slate-700 rounded px-2 py-1 text-sm text-white outline-none focus:border-indigo-500" />
-                    </div>
-                  </div>
-                </div>
+                <div key={s.id} className="p-4 bg-[#1a1b23] rounded-lg border border-slate-700 relative group"><button onClick={() => removeString(s.id)} className="absolute top-2 right-2 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></button><div className="grid grid-cols-2 gap-3"><div className="col-span-2"><input type="text" value={s.name} onChange={e => updateString(s.id, 'name', e.target.value)} className="w-full bg-transparent border-b border-slate-700 focus:border-indigo-500 outline-none text-sm font-bold text-white py-1" /></div><div><label className="block text-[9px] font-bold text-slate-500 uppercase">Panels</label><input type="number" value={s.count} onChange={e => updateString(s.id, 'count', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded px-2 py-1 text-sm text-white" /></div><div><label className="block text-[9px] font-bold text-slate-500 uppercase">Azimuth</label><input type="number" value={s.azimuth} onChange={e => updateString(s.id, 'azimuth', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded px-2 py-1 text-sm text-white" /></div></div></div>
               ))}
             </div>
+            <div className="pt-4 border-t border-slate-700/50 flex justify-between items-center text-xs text-slate-400"><p>Capacity: <strong className="text-white text-sm">{totalCapacity.toFixed(2)} kWp</strong></p><button onClick={logout} className="text-red-400 hover:underline md:hidden">Log Out</button></div>
+            <div className="p-2 bg-slate-900/50 rounded border border-slate-800 text-[9px] font-mono text-slate-600"><p>UID: {user?.uid}</p><p>DB: {dbStatus} | Sync: {lastSynced || "Never"}</p></div>
+          </div>
+        )}
 
-            <div className="pt-4 border-t border-slate-700/50 flex justify-between items-center text-xs text-slate-400">
-              <p>Total Capacity: <strong className="text-white text-sm">{totalCapacity.toFixed(2)} kWp</strong></p>
-              <p>Autosaves to cloud.</p>
+        {/* MAIN TABS */}
+        {activeTab === 'today' && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-[#252630] p-5 rounded-xl border border-slate-700/50 shadow-sm flex flex-col justify-between">
+                <div><p className="text-slate-400 text-sm font-medium mb-1">Forecast Today</p><div className="flex items-end gap-2"><h2 className="text-3xl font-bold text-white">{todayForecast.yield.toFixed(1)}</h2><span className="text-slate-500 mb-1 font-medium">kWh</span></div></div>
+                <div className="mt-4 space-y-1">
+                  {(config.strings || []).map((s, idx) => (<div key={s.id} className="flex items-center gap-2 text-[10px] text-slate-500"><div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: STRING_COLORS[idx % STRING_COLORS.length] }}></div><span className="truncate flex-1">{s.name}:</span><span className="font-mono">{(todayForecast.strings?.[s.id] || 0).toFixed(1)}</span></div>))}
+                </div>
+              </div>
+              <div className="bg-gradient-to-br from-[#1e293b] to-[#0f172a] p-5 rounded-xl border border-indigo-500/30 shadow-sm flex flex-col justify-between">
+                <div><label className="text-indigo-300 text-sm font-medium mb-1 flex items-center gap-2"><Zap className="w-4 h-4 text-indigo-400" /> Today's Actual</label><div className="mt-2 flex items-center gap-2"><input type="number" value={actuals[todayForecast.dayLabel] || ''} onChange={e => saveActualToCloud(todayForecast.dayLabel, e.target.value)} className="w-full bg-transparent border-b-2 border-indigo-500 p-1 text-3xl font-bold text-white outline-none" step="0.1" placeholder="0.0" /><span className="text-slate-500 font-medium text-xs">kWh</span></div></div>
+                <p className="mt-4 text-[10px] text-slate-500 leading-tight italic">Syncs to cloud for model tuning.</p>
+              </div>
+              <div className={`p-5 rounded-xl border shadow-sm flex flex-col justify-between ${daysEntered > 0 ? (isAccurate ? 'bg-emerald-900/10 border-emerald-500/20' : 'bg-amber-900/10 border-amber-500/20') : 'bg-[#252630] border-slate-700/50'}`}>
+                <div><p className="text-slate-400 text-sm font-medium mb-1 flex items-center gap-2"><Target className="w-4 h-4" /> Calibration</p>{daysEntered > 0 ? <div className="flex items-end gap-2 mt-2"><h2 className={`text-3xl font-bold ${isAccurate ? 'text-emerald-400' : 'text-amber-400'}`}>{accuracyPercentage}%</h2><span className="text-[10px] text-slate-500 mb-1 uppercase">Accuracy</span></div> : <p className="text-slate-500 text-xs mt-3">Enter data to tune model.</p>}</div>
+                {canApply && <button onClick={() => saveConfigToCloud({ ...config, eff: suggestedEff })} className="mt-3 w-full py-1.5 text-[10px] font-bold rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">APPLY {(suggestedEff * 100).toFixed(1)}% EFF</button>}
+              </div>
+              <div className="hidden md:flex bg-[#252630] p-5 rounded-xl border border-slate-700/50 shadow-sm flex-col justify-between"><div><p className="text-slate-400 text-sm font-medium mb-1">Forecast Tomorrow</p><div className="flex items-end gap-2"><h2 className="text-3xl font-bold text-white">{tomorrowForecast.yield.toFixed(1)}</h2><span className="text-slate-500 mb-1 font-medium">kWh</span></div></div><div className="mt-4 flex items-center gap-2 text-[10px] text-slate-500"><Calendar className="w-3 h-3 text-blue-400" /> 24h Prediction</div></div>
+            </div>
+            <div className="bg-[#252630] p-4 md:p-6 rounded-2xl border border-slate-700/50 shadow-lg">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Activity className="w-5 h-5 text-indigo-400" /> Hourly Profile</h2>
+                <div className="flex flex-wrap gap-2">{['clouds', 'total', 'energy', 'strings'].map(key => (<button key={key} onClick={() => toggleSeries(key)} className={`px-2 py-1 rounded text-[9px] font-bold uppercase border transition-all ${visibleSeries[key] ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-transparent border-slate-800 text-slate-600'}`}>{key}</button>))}</div>
+              </div>
+              <div className="h-[250px] w-full">
+                <ResponsiveContainer width="100%" height="100%"><ComposedChart data={selectedDayData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" /><XAxis dataKey="timeLabel" interval={3} stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} /><YAxis stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} /><YAxis yAxisId="right" orientation="right" stroke="#818cf8" fontSize={10} axisLine={false} tickLine={false} unit="kWh" />
+                    <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} content={({ active, payload, label }) => {
+                      if (active && payload && payload.length) return (<div className="bg-[#1e293b] border border-slate-700 p-3 rounded-lg shadow-xl text-[10px] space-y-1"><p className="font-bold text-slate-400 mb-1">{label}</p>{payload.map((entry, idx) => (<div key={idx} className="flex justify-between gap-4"><span style={{ color: entry.color }}>{entry.name}:</span><span className="text-white font-mono">{entry.value} {entry.dataKey === 'cumulativeYield' ? 'kWh' : (entry.dataKey === 'cloudCover' ? '%' : 'kW')}</span></div>))}</div>); return null;
+                    }} />
+                    {visibleSeries.clouds && <Area yAxisId="right" type="monotone" dataKey="cloudCover" name="Cloud %" stroke="none" fill="#475569" fillOpacity={0.1} />}
+                    {visibleSeries.total && <Area type="monotone" dataKey="total" name="Total Power" stroke="#fde047" fill="#fde047" fillOpacity={0.1} strokeWidth={2} />}
+                    {visibleSeries.strings && (config.strings || []).map((s, idx) => <Line key={s.id} type="monotone" dataKey={`stringPowers.${s.id}`} name={s.name} stroke={STRING_COLORS[idx % STRING_COLORS.length]} strokeWidth={1} dot={false} strokeDasharray="5 5" />)}
+                    {visibleSeries.energy && <Line yAxisId="right" type="monotone" dataKey="cumulativeYield" name="Energy" stroke="#818cf8" strokeWidth={3} dot={false} />}
+                    {currentHourTick && <ReferenceLine x={currentHourTick} stroke="#818cf8" strokeDasharray="4 4" />}
+                  </ComposedChart></ResponsiveContainer>
+              </div>
             </div>
           </div>
         )}
 
-        {/* METRICS */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {/* Card 1: Today Model Output */}
-          <div className="bg-[#252630] p-5 rounded-xl border border-slate-700/50 shadow-sm flex flex-col justify-between">
-          <div>
-            <p className="text-slate-400 text-sm font-medium mb-1">Model Forecast Today</p>
-            <div className="flex items-end gap-2"><h2 className="text-3xl font-bold text-white">{todayForecast.yield.toFixed(1)}</h2><span className="text-slate-500 mb-1 font-medium">kWh</span></div>
-          </div>
-          <div className="mt-4 space-y-1">
-            {(config.strings || []).map((s, idx) => (
-              <div key={s.id} className="flex items-center gap-2 text-[10px] text-slate-500">
-                <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: STRING_COLORS[idx % STRING_COLORS.length] }}></div>
-                <span className="truncate flex-1">{s.name}:</span>
-                <Zap className="w-2 h-2" aria-hidden="true" />
-                <span className="font-mono text-slate-400">{(todayForecast.strings?.[s.id] || 0).toFixed(1)}</span>
-              </div>
-            ))}
-          </div>        </div>
-          <div className="bg-gradient-to-br from-[#1e293b] to-[#0f172a] p-5 rounded-xl border border-indigo-500/30 shadow-sm flex flex-col justify-between">
-            <div>
-              <label className="text-indigo-300 text-sm font-medium mb-1 flex items-center gap-2">
-                <Zap className="w-4 h-4 text-indigo-400" aria-hidden="true" /> 
-                Today's Inverter Actual
-              </label>
-              <div className="mt-2 flex items-center gap-2">
-                <input 
-                  type="number" 
-                  value={actuals[todayForecast.dayLabel] || ''} 
-                  onChange={e => saveActualToCloud(todayForecast.dayLabel, e.target.value)}
-                  aria-label="Enter today's total kWh from your inverter"
-                  className="w-full bg-[#1a1b23]/50 border-b-2 border-indigo-500 p-1 text-3xl font-bold text-white outline-none focus:border-indigo-400 transition-colors" 
-                  step="0.1" 
-                  placeholder="0.0" 
-                />
-                <span className="text-slate-500 font-medium uppercase text-xs">kWh</span>
+        {activeTab === 'forecast' && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+            <div className="bg-[#252630] p-6 rounded-2xl border border-slate-700/50 shadow-lg">
+              <h2 className="text-lg font-semibold text-white mb-6">7-Day Yield Outlook</h2>
+              <div className="h-[350px] w-full">
+                <ResponsiveContainer width="100%" height="100%"><AreaChart data={data} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}><defs><linearGradient id="colorYellow" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#fde047" stopOpacity={0.4} /><stop offset="95%" stopColor="#fde047" stopOpacity={0.0} /></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" /><XAxis dataKey="fullLabel" tickFormatter={(val) => val.split(' ')[0]} interval={23} stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} /><YAxis stroke="#64748b" fontSize={11} domain={[0, Math.ceil(maxKw)]} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} /><Area type="monotone" dataKey="total" name="Total kW" stroke="#fde047" fill="url(#colorYellow)" strokeWidth={2} />{nowLabel && <ReferenceLine x={nowLabel} stroke="#818cf8" strokeDasharray="4 4" />}</AreaChart></ResponsiveContainer>
               </div>
             </div>
-            <p className="mt-4 text-[11px] text-slate-500 leading-tight">Syncs to secure cloud for model auto-calibration.</p>
           </div>
+        )}
 
-          <div className={`p-5 rounded-xl border shadow-sm flex flex-col justify-between ${daysEntered > 0 ? (isAccurate ? 'bg-emerald-900/10 border-emerald-500/20' : 'bg-amber-900/10 border-amber-500/20') : 'bg-[#252630] border-slate-700/50'}`}>
-            <div>
-              <p className="text-slate-400 text-sm font-medium mb-1 flex items-center gap-2"><Target className="w-4 h-4" /> Model Calibration</p>
-              {daysEntered > 0 ? (
-                <div className="flex items-end gap-2 mt-2"><h2 className={`text-3xl font-bold ${isAccurate ? 'text-emerald-400' : 'text-amber-400'}`}>{accuracyPercentage}% <span className="text-sm font-normal text-slate-400">accuracy</span></h2></div>
-              ) : <p className="text-slate-500 text-sm mt-3">Enter actuals to calibrate.</p>}
-            </div>
-            <div className="mt-3">
-              {canApply ? (
-                <div className="space-y-2">
-                  <p className="text-[10px] text-amber-500 font-medium animate-pulse">Calibration Recommended</p>
-                  <button onClick={() => saveConfigToCloud({ ...config, eff: suggestedEff })}
-                    className={`w-full py-1.5 text-xs font-bold rounded border transition-colors ${isAccurate ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border-amber-500/30'}`}>
-                    Apply {(suggestedEff * 100).toFixed(1)}% Efficiency
-                  </button>
-                </div>
-              ) : daysEntered > 0 ? <p className="text-[11px] text-emerald-500 font-medium leading-tight">Model is perfectly tuned!</p> : null}
-            </div>
+        {activeTab === 'history' && (
+          <div className="bg-[#252630] rounded-2xl border border-slate-700/50 overflow-hidden shadow-lg animate-in fade-in slide-in-from-bottom-2">
+            <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-[#1e293b]/50 border-b border-slate-700"><tr className="text-slate-400 uppercase text-[10px] font-bold"><th className="p-4">Date</th><th className="p-4">Model</th><th className="p-4 text-indigo-400">Actual</th></tr></thead><tbody className="text-slate-300 divide-y divide-slate-700/50">{dailyTotals.map((day, i) => (<tr key={i} className="hover:bg-[#2d2e3a] transition-colors"><td className="p-4 font-medium text-xs whitespace-nowrap">{day.date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</td><td className="p-4 font-bold text-white text-xs">{day.yield.toFixed(2)} kWh</td><td className="p-4"><input type="number" value={actuals[day.dayLabel] || ''} onChange={e => saveActualToCloud(day.dayLabel, e.target.value)} className="w-16 h-8 bg-[#1a1b23] border border-slate-600 rounded px-2 text-white text-xs" /></td></tr>))}</tbody></table></div>
           </div>
+        )}
 
-          <div className="bg-[#252630] p-5 rounded-xl border border-slate-700/50 shadow-sm flex flex-col justify-between">
-            <div>
-              <p className="text-slate-400 text-sm font-medium mb-1">Forecast Tomorrow</p>
-              <div className="flex items-end gap-2"><h2 className="text-3xl font-bold text-white">{tomorrowForecast.yield.toFixed(1)}</h2><span className="text-slate-500 mb-1 font-medium">kWh</span></div>
-            </div>
-            <div className="mt-4 flex items-center gap-2 text-xs text-slate-400"><Calendar className="w-4 h-4 text-blue-400" /> Open-Meteo predictions</div>
-          </div>
-        </div>
-
-        {/* MAIN CHART */}
-        <div className="bg-[#252630] p-5 md:p-6 rounded-2xl border border-slate-700/50 shadow-lg">
-          <h2 className="text-lg font-semibold text-white mb-6">Dynamic Yield Curve (kW)</h2>
-          <div className="h-[350px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data} margin={{ top: 10, right: 0, left: -20, bottom: 0 }} onClick={(state) => state?.activePayload?.[0] && setSelectedDayLabel(state.activePayload[0].payload.dayLabel)} style={{ cursor: 'pointer' }}>
-                <defs>
-                  <linearGradient id="colorYellow" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#fde047" stopOpacity={0.4} /><stop offset="95%" stopColor="#fde047" stopOpacity={0.0} /></linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
-                <XAxis dataKey="fullLabel" tickFormatter={(val) => val.split(' ')[0]} interval={23} stroke="#64748b" fontSize={11} tickMargin={10} axisLine={false} tickLine={false} />
-                <YAxis
-                  stroke="#64748b"
-                  fontSize={11}
-                  domain={[0, Math.ceil(maxKw)]}
-                  axisLine={false}
-                  tickLine={false}
-                  tickMargin={10}
-                />
-                <YAxis
-                  yAxisId="right"
-                  orientation="right"
-                  stroke="#475569"
-                  fontSize={10}
-                  domain={[0, 100]}
-                  axisLine={false}
-                  tickLine={false}
-                  unit="%"
-                  hide={true} // Keep it subtle, just use the data
-                />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc' }}
-                  itemStyle={{ color: '#fde047', fontWeight: 'bold' }}
-                  labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
-                />
-                <Area
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="cloudCover"
-                  name="Cloud Cover"
-                  stroke="none"
-                  fill="#475569"
-                  fillOpacity={0.15}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="total"
-                  name="Model Power (kW)"
-                  stroke="#fde047"
-                  fill="url(#colorYellow)"
-                  strokeWidth={2}
-                />
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="cumulativeYield"
-                  name="Total Energy (kWh)"
-                  stroke="#818cf8"
-                  strokeWidth={1.5}
-                  dot={false}
-                  strokeDasharray="3 3"
-                />
-                {nowLabel && <ReferenceLine x={nowLabel} stroke="#818cf8" strokeDasharray="4 4" label={{ position: 'insideTopLeft', value: 'CURRENT TIME', fill: '#818cf8', fontSize: 10, fontWeight: 600 }} />}
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-          <div className="bg-[#252630] p-5 md:p-6 rounded-2xl border border-indigo-500/30 shadow-lg">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-              <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Calendar className="w-5 h-5 text-indigo-400" /> Hourly Profile: {selectedDayLabel}</h2>
-              <div className="flex flex-wrap gap-2">
-                <button 
-                  onClick={() => toggleSeries('clouds')} 
-                  className={`px-2 py-1 rounded text-[10px] font-bold transition-all border ${visibleSeries.clouds ? 'bg-slate-700 border-slate-500 text-slate-200' : 'bg-transparent border-slate-800 text-slate-600'}`}
-                >
-                  Cloud Cover
-                </button>
-                <button 
-                  onClick={() => toggleSeries('total')} 
-                  className={`px-2 py-1 rounded text-[10px] font-bold transition-all border ${visibleSeries.total ? 'bg-[#fde047]/20 border-[#fde047]/50 text-[#fde047]' : 'bg-transparent border-slate-800 text-slate-600'}`}
-                >
-                  Total Power
-                </button>
-                <button 
-                  onClick={() => toggleSeries('energy')} 
-                  className={`px-2 py-1 rounded text-[10px] font-bold transition-all border ${visibleSeries.energy ? 'bg-[#818cf8]/20 border-[#818cf8]/50 text-[#818cf8]' : 'bg-transparent border-slate-800 text-slate-600'}`}
-                >
-                  Cumulative Energy
-                </button>
-                <button 
-                  onClick={() => toggleSeries('strings')} 
-                  className={`px-2 py-1 rounded text-[10px] font-bold transition-all border ${visibleSeries.strings ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-400' : 'bg-transparent border-slate-800 text-slate-600'}`}
-                >
-                  Individual Strings
-                </button>
-              </div>
-            </div>
-            <div className="h-[250px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={selectedDayData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
-                  <XAxis dataKey="timeLabel" interval={3} stroke="#64748b" fontSize={11} tickMargin={10} axisLine={false} tickLine={false} />
-                  <YAxis stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} tickMargin={10} />
-                  <YAxis yAxisId="right" orientation="right" stroke="#818cf8" fontSize={10} axisLine={false} tickLine={false} tickMargin={10} unit="kWh" />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc' }} 
-                    itemStyle={{ fontWeight: 'bold' }} 
-                    labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
-                    content={({ active, payload, label }) => {
-                      if (active && payload && payload.length) {
-                        return (
-                          <div className="bg-[#1e293b] border border-slate-700 p-3 rounded-lg shadow-xl text-xs space-y-2">
-                            <p className="font-bold text-slate-400 mb-1">{label}</p>
-                            <div className="space-y-1">
-                              {payload.map((entry, idx) => (
-                                <div key={idx} className={`flex items-center justify-between gap-4 ${(entry.dataKey === 'total' || entry.dataKey === 'cumulativeYield') ? 'pt-1 border-t border-slate-800 font-bold' : ''}`}>
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }}></div>
-                                    <span className="text-slate-300">{entry.name}:</span>
-                                  </div>
-                                  <span className="text-white font-mono">{entry.value} {entry.dataKey === 'cumulativeYield' ? 'kWh' : (entry.dataKey === 'cloudCover' ? '%' : 'kW')}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                  
-                  {visibleSeries.clouds && (
-                    <Area yAxisId="right" type="monotone" dataKey="cloudCover" name="Cloud Cover (%)" stroke="none" fill="#475569" fillOpacity={0.1} />
-                  )}
-                  
-                  {visibleSeries.total && (
-                    <Area type="monotone" dataKey="total" name="Total Power (kW)" stroke="#fde047" fill="#fde047" fillOpacity={0.1} strokeWidth={2} />
-                  )}
-                  
-                  {visibleSeries.strings && (config.strings || []).map((s, idx) => (
-                    <Line 
-                      key={s.id}
-                      type="monotone" 
-                      dataKey={`stringPowers.${s.id}`} 
-                      name={`${s.name} (kW)`} 
-                      stroke={STRING_COLORS[idx % STRING_COLORS.length]} 
-                      strokeWidth={1.5} 
-                      dot={false} 
-                      strokeDasharray="5 5" 
-                    />
-                  ))}
-
-                  {visibleSeries.energy && (
-                    <Line 
-                      yAxisId="right"
-                      type="monotone" 
-                      dataKey="cumulativeYield" 
-                      name="Total Energy (kWh)" 
-                      stroke="#818cf8" 
-                      strokeWidth={3} 
-                      dot={false} 
-                    />
-                  )}
-
-                  {currentHourTick && <ReferenceLine x={currentHourTick} stroke="#818cf8" strokeDasharray="4 4" />}
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-        {/* TABLE */}
-        <div className="bg-[#252630] rounded-2xl border border-slate-700/50 overflow-hidden shadow-lg">
-          <div className="p-5 border-b border-slate-700/50 flex justify-between items-center bg-[#1e293b]/50">
-            <h2 className="text-lg font-semibold text-white">Daily Calculation Breakdown</h2>
-          </div>
-          <div className="overflow-x-auto max-h-[450px] overflow-y-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="sticky top-0 bg-[#252630] z-10 border-b border-slate-700">
-                <tr className="text-slate-400 uppercase text-[11px] font-semibold">
-                  <th className="p-4">Date</th>
-                  <th className="p-4">Timeframe</th>
-                  {(config.strings || []).map(s => (
-                    <th key={s.id} className="p-4">{s.name}</th>
-                  ))}
-                  <th className="p-4 text-white">Model (kWh)</th>
-                  <th className="p-4 text-indigo-300">Actual (kWh)</th>
-                </tr>
-              </thead>
-              <tbody className="text-slate-300 divide-y divide-slate-700/50">
-                {dailyTotals.map((day, i) => (
-                  <tr key={i} onClick={() => setSelectedDayLabel(day.dayLabel)} className={`hover:bg-[#2d2e3a] cursor-pointer ${selectedDayLabel === day.dayLabel ? 'bg-indigo-900/40 border-l-2 border-indigo-400' : ''}`}>
-                    <td className="p-4">{day.date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</td>
-                    <td className="p-4">
-                      {day.dayOffset < 0 ? (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-500 uppercase">Past</span>
-                      ) : day.dayOffset === 0 ? (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 uppercase">Today</span>
-                      ) : (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 uppercase">Fcst</span>
-                      )}
-                    </td>
-                    {(config.strings || []).map(s => (
-                      <td key={s.id} className="p-4 text-slate-400 font-mono text-xs">{(day.strings?.[s.id] || 0).toFixed(1)}</td>
-                    ))}
-                    <td className="p-4 font-bold text-white">{(day.yield || 0).toFixed(2)}</td>
-                    <td className="p-4" onClick={e => e.stopPropagation()}>
-                      {day.dayOffset <= 0 ? (
-                        <div className="flex items-center gap-2">
-                          <input 
-                            type="number" 
-                            value={actuals[day.dayLabel] || ''} 
-                            onChange={e => saveActualToCloud(day.dayLabel, e.target.value)}
-                            aria-label={`Inverter actual for ${day.dayLabel}`}
-                            className="w-24 h-9 bg-[#1a1b23] border border-slate-600 rounded-lg px-2 text-white text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-mono" 
-                            placeholder="0.0" 
-                          />
-                          <Zap className="w-3 h-3 text-slate-600" aria-hidden="true" />
-                        </div>
-                      ) : <span className="text-slate-700 italic text-xs px-4">Predicted</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        {/* MOBILE BOTTOM NAV */}
+        <div className="fixed bottom-0 left-0 right-0 h-16 bg-[#1a1b23]/95 backdrop-blur-md border-t border-slate-800 flex md:hidden items-center justify-around px-6 z-50 pb-safe">
+           <button onClick={() => setActiveTab('today')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'today' ? 'text-indigo-400' : 'text-slate-600'}`}><LayoutDashboard className="w-5 h-5" /><span className="text-[9px] font-bold uppercase tracking-tighter">Today</span></button>
+           <button onClick={() => setActiveTab('forecast')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'forecast' ? 'text-indigo-400' : 'text-slate-600'}`}><TrendingUp className="w-5 h-5" /><span className="text-[9px] font-bold uppercase tracking-tighter">Forecast</span></button>
+           <button onClick={() => setActiveTab('history')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'history' ? 'text-indigo-400' : 'text-slate-600'}`}><History className="w-5 h-5" /><span className="text-[9px] font-bold uppercase tracking-tighter">History</span></button>
         </div>
 
       </div>

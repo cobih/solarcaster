@@ -1,0 +1,17 @@
+{
+  "name": "Solarcaster",
+  "short_name": "Solarcaster",
+  "description": "Dynamic Solar Forecasting & Calibration",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1b23",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
