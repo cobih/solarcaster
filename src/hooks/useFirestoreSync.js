@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
+import { sanitizeConfig } from '../utils/sanitize';
 
 export const useFirestoreSync = (user, appId) => {
   const [dbSyncing, setDbSyncing] = useState(false);
@@ -76,12 +77,13 @@ export const useFirestoreSync = (user, appId) => {
   }, [user, appId]);
 
   const saveConfigToCloud = async (newConfig) => {
-    setConfig(newConfig);
+    const cleanConfig = sanitizeConfig(newConfig);
+    setConfig(cleanConfig);
     if (!user) return;
     setDbStatus("Saving Config...");
     try {
       const configRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'config');
-      await setDoc(configRef, newConfig, { merge: true });
+      await setDoc(configRef, cleanConfig, { merge: true });
       setDbStatus("Config Saved");
       setLastSynced(new Date().toLocaleTimeString());
     } catch (err) {

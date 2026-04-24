@@ -5,8 +5,12 @@ service cloud.firestore {
     
     // STRICT RULE: Only allow access to the specific app path for the specific authenticated user.
     // Path: /artifacts/solar-forecaster-63320/users/{userId}/solar_app/{document}
-    match /artifacts/solar-forecaster-63320/users/{userId}/solar_app/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    match /artifacts/solar-forecaster-63320/users/{userId}/solar_app/{document} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      
+      // Enforce schema integrity on config writes
+      allow write: if request.auth != null && request.auth.uid == userId 
+                   && (document != 'config' || request.resource.data.schemaVersion >= 2);
     }
     
     // Default: Deny everything else explicitly

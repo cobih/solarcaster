@@ -13,6 +13,7 @@ import {
 import { useSolarAuth } from './hooks/useSolarAuth';
 import { useFirestoreSync } from './hooks/useFirestoreSync';
 import { useSolarPhysics } from './hooks/useSolarPhysics';
+import { sanitizeString } from './utils/sanitize';
 
 const appId = "solar-forecaster-63320";
 
@@ -47,16 +48,15 @@ export default function App() {
       const { latitude, longitude } = position.coords;
       
       try {
-        // Reverse Geocode using Nominatim
         const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
         const data = await res.json();
-        const locationName = data.address.city || data.address.town || data.address.village || data.address.suburb || "Detected Location";
+        const city = data.address.city || data.address.town || data.address.village || data.address.suburb || "Detected Location";
         
         saveConfigToCloud({
           ...config,
           lat: latitude,
           long: longitude,
-          locationName: `${locationName}, ${data.address.country}`
+          locationName: sanitizeString(`${city}, ${data.address.country}`)
         });
       } catch (err) {
         console.error("Reverse geocoding failed:", err);
@@ -134,12 +134,12 @@ export default function App() {
       const results = await res.json();
       const mapped = results.map(r => ({
         id: r.place_id,
-        name: (r.display_name.split(',')[0] || "").replace(/<[^>]*>?/gm, ''),
-        admin1: (r.address.county || r.address.state || '').replace(/<[^>]*>?/gm, ''),
-        country: (r.address.country || '').replace(/<[^>]*>?/gm, ''),
+        name: sanitizeString(r.display_name.split(',')[0] || ""),
+        admin1: sanitizeString(r.address.county || r.address.state || ''),
+        country: sanitizeString(r.address.country || ''),
         latitude: parseFloat(r.lat),
         longitude: parseFloat(r.lon),
-        fullName: r.display_name.replace(/<[^>]*>?/gm, '')
+        fullName: sanitizeString(r.display_name)
       }));
       setSearchResults(mapped);
     } catch (err) {
