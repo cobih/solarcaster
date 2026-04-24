@@ -52,7 +52,7 @@ export const useSolarPhysics = (config, dbSyncing) => {
   const [data, setData] = useState([]);
   const [dailyTotals, setDailyTotals] = useState([]);
   const [nowLabel, setNowLabel] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Changed to false by default
   const [error, setError] = useState(null);
 
   useEffect(() => {
