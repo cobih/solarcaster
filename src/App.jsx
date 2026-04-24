@@ -448,17 +448,49 @@ export default function App() {
               )}
               <div className="flex items-center gap-4 text-[10px] text-slate-400 font-mono bg-[#1a1b23] p-2 rounded-lg border border-slate-800/50"><div><span className="text-slate-600">LAT:</span> <span className="text-white">{config.lat?.toFixed(4)}</span></div><div><span className="text-slate-600">LON:</span> <span className="text-white">{config.long?.toFixed(4)}</span></div>{config.locationName && <div className="ml-auto text-indigo-400 italic truncate max-w-[150px]">{config.locationName}</div>}</div>
             </div>
-            <div className="flex justify-between items-center border-b border-slate-700 pb-4"><h3 className="font-semibold text-white text-sm flex items-center gap-2"><Calculator className="w-4 h-4 text-amber-400" /> String Configuration</h3><div className="flex items-center gap-4"><div className="flex items-center gap-2"><label className="text-[10px] text-slate-400 uppercase font-bold">Eff.</label><input type="number" value={config.eff * 100} onChange={e => { saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 }); logAnalyticsEvent('config_change', { type: 'efficiency' }); }} className="w-14 p-1 bg-[#1a1b23] border border-slate-600 rounded text-white text-xs font-mono" /></div><button onClick={addString} className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold flex items-center gap-1"><Plus className="w-3 h-3" /> Add</button></div></div>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-700 pb-4 gap-4">
+              <h3 className="font-semibold text-white text-sm flex items-center gap-2"><Calculator className="w-4 h-4 text-amber-400" /> String Configuration</h3>
+              <div className="flex items-center gap-4 w-full md:w-auto">
+                <div className="flex flex-1 items-center gap-3 bg-[#1a1b23] p-2 rounded-xl border border-slate-800">
+                   <label className="text-[9px] font-black text-slate-500 uppercase">Efficiency</label>
+                   <input 
+                     type="range" 
+                     min="10" max="100" 
+                     value={config.eff * 100} 
+                     onChange={e => { saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 }); }}
+                     className="flex-1 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500" 
+                   />
+                   <div className="flex items-center gap-1 min-w-[45px]">
+                     <input 
+                       type="number" 
+                       value={Math.round(config.eff * 100)} 
+                       onChange={e => { saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 }); }}
+                       className="w-8 bg-transparent text-indigo-400 text-xs font-bold font-mono outline-none" 
+                     />
+                     <span className="text-[10px] text-slate-600">%</span>
+                   </div>
+                </div>
+                <button onClick={addString} className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/20"><Plus className="w-4 h-4" /> Add String</button>
+              </div>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {(config.strings || []).map((s, idx) => (
-                <div key={s.id} className="p-4 bg-[#1a1b23] rounded-lg border border-slate-700 relative group">
-                  <button onClick={() => removeString(s.id)} className="absolute top-2 right-2 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></button>
+                <div key={s.id} className="p-4 bg-[#1a1b23] rounded-2xl border border-slate-700 relative group animate-in slide-in-from-bottom-2">
+                  <div className="flex justify-between items-center mb-3">
+                    <input type="text" value={s.name} onChange={e => updateString(s.id, 'name', e.target.value)} className="bg-transparent border-b border-slate-800 focus:border-indigo-500 outline-none text-white font-bold text-sm py-1" />
+                    <button 
+                      onClick={() => removeString(s.id)} 
+                      className="p-2 bg-red-900/10 hover:bg-red-900/30 text-red-500 rounded-lg flex items-center gap-1 transition-colors border border-red-500/10"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span className="text-[8px] font-black uppercase">Remove</span>
+                    </button>
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="col-span-2"><input type="text" value={s.name} onChange={e => updateString(s.id, 'name', e.target.value)} className="w-full bg-transparent border-b border-slate-700 focus:border-indigo-500 outline-none text-sm font-bold text-white py-1" /></div>
-                    <div><label className="block text-[9px] font-bold text-slate-500 uppercase">Panels</label><input type="number" value={s.count} onChange={e => updateString(s.id, 'count', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded px-2 py-1 text-sm text-white" /></div>
-                    <div><label className="block text-[9px] font-bold text-slate-500 uppercase">Wattage</label><input type="number" value={s.wattage || 465} onChange={e => updateString(s.id, 'wattage', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded px-2 py-1 text-sm text-white" /></div>
-                    <div><label className="block text-[9px] font-bold text-slate-500 uppercase">Azimuth</label><input type="number" value={s.azimuth} onChange={e => updateString(s.id, 'azimuth', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded px-2 py-1 text-sm text-white" /></div>
-                    <div><label className="block text-[9px] font-bold text-slate-500 uppercase">Pitch / Tilt</label><input type="number" value={s.tilt} onChange={e => updateString(s.id, 'tilt', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded px-2 py-1 text-sm text-white" /></div>
+                    <div><label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Panels</label><input type="number" value={s.count} onChange={e => updateString(s.id, 'count', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white" /></div>
+                    <div><label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Wattage</label><input type="number" value={s.wattage || 465} onChange={e => updateString(s.id, 'wattage', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white" /></div>
+                    <div><label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Azimuth</label><input type="number" value={s.azimuth} onChange={e => updateString(s.id, 'azimuth', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white" /></div>
+                    <div><label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Pitch / Tilt</label><input type="number" value={s.tilt} onChange={e => updateString(s.id, 'tilt', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white" /></div>
                   </div>
                 </div>
               ))}
