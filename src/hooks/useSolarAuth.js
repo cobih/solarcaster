@@ -66,7 +66,16 @@ export const useSolarAuth = () => {
     }
   };
 
-  const logout = () => signOut(auth);
+  const logout = async () => {
+    try {
+      const { clearSensitiveData } = await import('../firebase');
+      await clearSensitiveData();
+      await signOut(auth);
+      window.location.reload(); // Force a clean slate
+    } catch (e) {
+      console.error("Logout failed:", e);
+    }
+  };
 
   return { user, authLoading, authError, login, logout };
 };

@@ -341,19 +341,6 @@ export default function App() {
               <p>Total Capacity: <strong className="text-white text-sm">{totalCapacity.toFixed(2)} kWp</strong></p>
               <p>Autosaves to cloud.</p>
             </div>
-
-            {/* DEBUG INFO (Inside Config) */}
-            <div className="mt-4 p-4 bg-slate-900/50 rounded-lg border border-slate-800 text-[10px] font-mono text-slate-500 overflow-x-auto">
-              <div className="flex justify-between items-start mb-2 border-b border-slate-800 pb-2">
-                <p className="font-bold text-slate-400 uppercase tracking-tighter">Debug Session Info</p>
-                <button onClick={() => { localStorage.clear(); window.location.href = "/"; }} className="text-indigo-400 underline">Reset Cache</button>
-              </div>
-              <p>UID: {user?.uid || "None"}</p>
-              <p>Email: {user?.email || "None"}</p>
-              <p>Error: <span className="text-red-400">{authError || "None"}</span></p>
-              <p>DB Status: {dbStatus} | Sync: {lastSynced || "Never"}</p>
-              <p>Path: /artifacts/{appId}/users/{user?.uid}/solar_app/</p>
-            </div>
           </div>
         )}
 

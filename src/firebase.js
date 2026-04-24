@@ -18,4 +18,14 @@ const db = getFirestore(app);
 
 setPersistence(auth, browserLocalPersistence).catch(err => console.error("Persistence Error:", err));
 
+export const clearSensitiveData = async () => {
+  try {
+    // Terminates Firestore and clears local data
+    await db.terminate();
+    // In a real multi-user app, you might also clear indexedDB directly here
+  } catch (e) {
+    console.error("Cache clear failed:", e);
+  }
+};
+
 export { app, auth, db };

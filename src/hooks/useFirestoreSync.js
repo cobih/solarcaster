@@ -11,6 +11,7 @@ export const useFirestoreSync = (user, appId) => {
     lat: 53.3767,
     long: -6.3286,
     eff: 0.85,
+    schemaVersion: 2, // Track schema for safe migrations
     strings: [
       { id: 's1', name: "East String", azimuth: 90, tilt: 35, count: 11 },
       { id: 's2', name: "West String", azimuth: 270, tilt: 35, count: 9 }
