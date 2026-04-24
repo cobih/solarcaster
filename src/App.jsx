@@ -6,7 +6,7 @@ import {
 import {
   Sun, Calendar, Settings, AlertCircle, Info, Target, Calculator, Zap, Cloud,
   LogOut, LogIn, User, Plus, Trash2, Activity,
-  MapPin, Search, Navigation, LayoutDashboard, TrendingUp, History
+  MapPin, Search, Navigation, LayoutDashboard, TrendingUp, History, CloudRain
 } from 'lucide-react';
 
 import { useSolarAuth } from './hooks/useSolarAuth';
@@ -197,6 +197,13 @@ export default function App() {
           </div>
         </div>
 
+        {/* DESKTOP TOP NAV */}
+        <div className="hidden md:flex items-center gap-1 p-1 bg-[#252630] rounded-xl border border-slate-800 w-fit">
+          <button onClick={() => setActiveTab('today')} className={`px-6 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'today' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>Today</button>
+          <button onClick={() => setActiveTab('forecast')} className={`px-6 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'forecast' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>7-Day Forecast</button>
+          <button onClick={() => setActiveTab('history')} className={`px-6 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'history' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>History</button>
+        </div>
+
         {showConfig && (
           <div className="bg-[#252630] p-5 rounded-xl border border-slate-700 shadow-lg animate-in fade-in slide-in-from-top-4 space-y-6">
             <div className="space-y-3 pb-4 border-b border-slate-700/50">
@@ -269,13 +276,68 @@ export default function App() {
           </div>
         )}
 
+        {/* --- FORECAST VIEW --- */}
         {activeTab === 'forecast' && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 pb-8">
             <div className="bg-[#252630] p-6 rounded-2xl border border-slate-700/50 shadow-lg">
-              <h2 className="text-lg font-semibold text-white mb-6">7-Day Yield Outlook</h2>
-              <div className="h-[350px] w-full">
-                <ResponsiveContainer width="100%" height="100%"><AreaChart data={data} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}><defs><linearGradient id="colorYellow" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#fde047" stopOpacity={0.4} /><stop offset="95%" stopColor="#fde047" stopOpacity={0.0} /></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" /><XAxis dataKey="fullLabel" tickFormatter={(val) => val.split(' ')[0]} interval={23} stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} /><YAxis stroke="#64748b" fontSize={11} domain={[0, Math.ceil(maxKw)]} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} /><Area type="monotone" dataKey="total" name="Total kW" stroke="#fde047" fill="url(#colorYellow)" strokeWidth={2} />{nowLabel && <ReferenceLine x={nowLabel} stroke="#818cf8" strokeDasharray="4 4" />}</AreaChart></ResponsiveContainer>
+              <h2 className="text-lg font-semibold text-white mb-6 flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-indigo-400" />
+                7-Day Yield Outlook
+              </h2>
+              <div className="h-[250px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={data} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                    <defs><linearGradient id="colorYellow" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#fde047" stopOpacity={0.4} /><stop offset="95%" stopColor="#fde047" stopOpacity={0.0} /></linearGradient></defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
+                    <XAxis dataKey="fullLabel" tickFormatter={(val) => val.split(' ')[0]} interval={23} stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} />
+                    <YAxis stroke="#64748b" fontSize={11} domain={[0, Math.ceil(maxKw)]} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} />
+                    <Area type="monotone" dataKey="total" name="Total kW" stroke="#fde047" fill="url(#colorYellow)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
               </div>
+            </div>
+
+            {/* Daily Summary List (Highly Optimized for Mobile) */}
+            <div className="grid grid-cols-1 gap-3">
+              {dailyTotals.filter(d => d.dayOffset >= 0).map((day) => {
+                const maxWeekYield = Math.max(...dailyTotals.map(d => d.yield));
+                const relScale = (day.yield / maxWeekYield) * 100;
+                const isVerySunny = day.yield > (maxWeekYield * 0.8);
+                const isCloudy = day.yield < (maxWeekYield * 0.4);
+
+                return (
+                  <div key={day.dayLabel} className="bg-[#252630] p-4 rounded-2xl border border-slate-800 flex items-center gap-4 transition-transform active:scale-[0.98]">
+                    <div className="text-center min-w-[56px] border-r border-slate-800 pr-4">
+                      <div className="text-[10px] text-slate-500 uppercase font-black tracking-widest">{day.date.toLocaleDateString([], { weekday: 'short' })}</div>
+                      <div className="text-xl font-black text-white">{day.date.toLocaleDateString([], { day: 'numeric' })}</div>
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-end mb-1.5">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Predicted</span>
+                        <span className="text-sm font-black text-white">{day.yield.toFixed(1)} <span className="text-[10px] text-slate-500 font-normal">kWh</span></span>
+                      </div>
+                      <div className="h-2 w-full bg-slate-800/50 rounded-full overflow-hidden border border-slate-700/30">
+                        <div 
+                          className={`h-full rounded-full transition-all duration-1000 ${isVerySunny ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.4)]' : 'bg-indigo-500'}`} 
+                          style={{ width: `${relScale}%` }}
+                        ></div>
+                      </div>
+                    </div>
+
+                    <div className="pl-2">
+                      {isVerySunny ? (
+                        <Sun className="w-6 h-6 text-amber-400 drop-shadow-md" />
+                      ) : isCloudy ? (
+                        <CloudRain className="w-6 h-6 text-slate-500" />
+                      ) : (
+                        <Cloud className="w-6 h-6 text-indigo-400/60" />
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
