@@ -22,7 +22,7 @@ export const useFirestoreSync = (user, appId) => {
       { id: 'd1', name: "Main Roof (South)", azimuth: 180, tilt: 35, count: 12, wattage: 400 }
     ] : [],
     effHistory: [],
-    apiEnabled: false,
+    apiEnabled: isDemo, // Enable by default for demo
   });
 
   const [actuals, setActuals] = useState(isDemo ? {
