@@ -7,13 +7,15 @@ import {
   Sun, Calendar, Settings, AlertCircle, Info, Target, Calculator, Zap, Cloud,
   LogOut, LogIn, User, Plus, Trash2, Activity,
   MapPin, Search, Navigation, LayoutDashboard, TrendingUp, History, CloudRain,
-  Crosshair, ChevronDown, ChevronUp
+  Crosshair, ChevronDown, ChevronUp, MessageSquare
 } from 'lucide-react';
 
 import { useSolarAuth } from './hooks/useSolarAuth';
 import { useFirestoreSync } from './hooks/useFirestoreSync';
 import { useSolarPhysics } from './hooks/useSolarPhysics';
 import { sanitizeString } from './utils/sanitize';
+import { db } from './firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 const appId = "solar-forecaster-63320";
 
@@ -28,6 +30,35 @@ export default function App() {
   } = useSolarPhysics(config, dbSyncing);
 
   const [showConfig, setShowConfig] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+
+  const submitFeedback = async () => {
+    if (!feedbackText.trim() || !user) return;
+    setIsSubmittingFeedback(true);
+    try {
+      await addDoc(collection(db, 'feedback'), {
+        userId: user.uid,
+        userEmail: user.email,
+        text: sanitizeString(feedbackText),
+        timestamp: serverTimestamp(),
+        appId: appId,
+        configSummary: {
+          eff: config.eff,
+          stringCount: config.strings?.length
+        }
+      });
+      setFeedbackText("");
+      setShowFeedback(false);
+      alert("Thanks for your feedback! The solar community appreciates it.");
+    } catch (err) {
+      console.error("Feedback failed:", err);
+      alert("Oops! Could't send feedback. Please try again.");
+    } finally {
+      setIsSubmittingFeedback(false);
+    }
+  };
   const [showForecastChart, setShowForecastChart] = useState(false);
   const [selectedDayLabel, setSelectedDayLabel] = useState("");
   const [expandedForecastDay, setExpandedForecastDay] = useState(null);
@@ -226,11 +257,24 @@ export default function App() {
             <p className="text-slate-400 text-[10px] md:text-sm mt-1 flex items-center gap-1"><MapPin className="w-3 h-3 text-indigo-400" aria-hidden="true" /> {config.locationName || `${config.lat?.toFixed(2)}°N, ${config.long?.toFixed(2)}°W`}</p>
           </div>
           <div className="flex items-center gap-2 md:gap-3">
-            <button onClick={() => setShowConfig(!showConfig)} className={`relative p-2 md:px-4 md:py-2 bg-[#252630] hover:bg-[#2d2e3a] border ${canApply ? 'border-amber-500/50 text-amber-400' : 'border-slate-700 text-slate-300'} rounded-lg flex items-center gap-2 transition-colors text-sm font-medium shadow-sm`}>
+            <button 
+              onClick={() => setShowConfig(!showConfig)} 
+              className={`relative p-2 md:px-4 md:py-2 bg-[#252630] hover:bg-[#2d2e3a] border ${canApply ? 'border-amber-500/50 text-amber-400' : 'border-slate-700 text-slate-300'} rounded-lg flex items-center gap-2 transition-colors text-sm font-medium shadow-sm`}
+            >
               {canApply ? <Activity className="w-4 h-4 animate-pulse" /> : <Settings className="w-4 h-4" />}
               <span className="hidden md:inline">Parameters</span>
               {canApply && <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full border-2 border-[#1a1b23]"></span>}
             </button>
+
+            <button 
+              onClick={() => setShowFeedback(true)}
+              className="p-2 md:px-4 md:py-2 bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 rounded-lg flex items-center gap-2 transition-colors text-sm font-medium shadow-sm"
+              title="Share Feedback"
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span className="hidden md:inline">Feedback</span>
+            </button>
+
             <div className="flex items-center gap-2 bg-[#252630] p-1 md:pr-3 rounded-full border border-slate-700 shadow-sm">
               {user.photoURL ? <img src={user.photoURL} alt="Profile" className="w-7 h-7 md:w-8 md:h-8 rounded-full border border-slate-600" /> : <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-slate-700 flex items-center justify-center"><User className="w-3 h-3 md:w-4 md:h-4 text-slate-400" /></div>}
               <button onClick={logout} className="hidden md:block text-slate-400 hover:text-white transition-colors ml-1"><LogOut className="w-4 h-4" /></button>
