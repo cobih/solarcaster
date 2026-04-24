@@ -257,7 +257,7 @@ export default function App() {
         </div>
 
         <div className="hidden md:flex items-center gap-1 p-1 bg-[#252630] rounded-xl border border-slate-800 w-fit">
-          {['today', 'forecast', 'history'].map(t => (<button key={m} onClick={() => setActiveTab(t)} className={`px-6 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === t ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>{t.charAt(0).toUpperCase() + t.slice(1)}</button>))}
+          {['today', 'forecast', 'history'].map(tab => (<button key={tab} onClick={() => setActiveTab(tab)} className={`px-6 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === tab ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</button>))}
         </div>
 
         {showConfig && (
