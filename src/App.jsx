@@ -38,7 +38,6 @@ export default function App() {
   const [expandedForecastDay, setExpandedForecastDay] = useState(null);
   const [activeTab, setActiveTab] = useState("today"); // 'today', 'forecast', 'history'
   const [addressQuery, setAddressQuery] = useState("");
-  const [plusCode, setPlusCode] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [lastSearchTime, setLastSearchTime] = useState(0);
@@ -290,8 +289,14 @@ export default function App() {
               <div className="flex items-center justify-between">
                 <h4 className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2"><MapPin className="w-3 h-3" /> System Location</h4>
                 <div className="flex bg-[#1a1b23] p-0.5 rounded-lg border border-slate-800">
-                  {['gps', 'search', 'plus', 'manual'].map(mode => (
-                    <button key={mode} onClick={() => { setLocationMode(mode); logAnalyticsEvent('change_location_mode', { mode }); }} className={`px-2 py-1 text-[8px] font-black uppercase rounded-md transition-all ${locationMode === mode ? 'bg-indigo-600 text-white' : 'text-slate-600'}`}>{mode}</button>
+                  {['gps', 'search', 'manual'].map(mode => (
+                    <button 
+                      key={mode} 
+                      onClick={() => { setLocationMode(mode); logAnalyticsEvent('change_location_mode', { mode }); }}
+                      className={`px-2 py-1 text-[8px] font-black uppercase rounded-md transition-all ${locationMode === mode ? 'bg-indigo-600 text-white' : 'text-slate-600'}`}
+                    >
+                      {mode}
+                    </button>
                   ))}
                 </div>
               </div>
@@ -300,44 +305,6 @@ export default function App() {
               )}
               {locationMode === 'search' && (
                 <div className="relative animate-in fade-in slide-in-from-left-2"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" /><input type="text" value={addressQuery} onChange={(e) => searchAddress(e.target.value)} placeholder="Search address, Eircode, or city..." className="w-full pl-10 pr-4 py-2.5 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white focus:border-indigo-500 outline-none" />{searchLoading && <Activity className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-500 animate-spin" />}{searchResults.length > 0 && (<div className="absolute z-50 mt-2 w-full bg-[#1a1b23] border border-slate-700 rounded-xl shadow-2xl overflow-hidden">{searchResults.map((res) => (<button key={res.id} onClick={() => selectLocation(res)} className="w-full px-4 py-3 text-left text-sm text-slate-300 hover:bg-indigo-600/20 hover:text-white border-b border-slate-800 last:border-0 transition-colors flex items-center gap-3"><Navigation className="w-3 h-3 text-indigo-400" /><div><div className="font-bold">{res.name}</div><div className="text-[10px] text-slate-500">{res.admin1 ? res.admin1 + ', ' : ''}{res.country}</div></div></button>))}</div>)}</div>
-              )}
-              {locationMode === 'plus' && (
-                <div className="space-y-2 animate-in fade-in slide-in-from-left-2">
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <Zap className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-400" />
-                      <input 
-                        type="text" 
-                        value={plusCode}
-                        onChange={(e) => setPlusCode(e.target.value)}
-                        onKeyDown={(e) => { if(e.key === 'Enter') searchAddress(plusCode); }}
-                        placeholder="Paste Plus Code (e.g. 8FWM7W3R+GV)"
-                        className="w-full pl-10 pr-4 py-2.5 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white focus:border-indigo-500 outline-none transition-all"
-                      />
-                    </div>
-                    <button 
-                      onClick={() => searchAddress(plusCode)}
-                      disabled={!plusCode || searchLoading}
-                      className="px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-[10px] font-bold uppercase transition-all"
-                    >
-                      {searchLoading ? "..." : "Resolve"}
-                    </button>
-                  </div>
-                  {searchResults.length > 0 && (
-                    <div className="mt-2 w-full bg-[#1a1b23] border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
-                      {searchResults.map((res) => (
-                        <button key={res.id} onClick={() => { selectLocation(res); setPlusCode(""); }} className="w-full px-4 py-3 text-left text-sm text-slate-300 hover:bg-indigo-600/20 hover:text-white border-b border-slate-800 last:border-0 flex items-center gap-3">
-                          <Navigation className="w-3 h-3 text-indigo-400" />
-                          <div>
-                            <div className="font-bold">{res.name}</div>
-                            <div className="text-[10px] text-slate-500">{res.admin1 ? res.admin1 + ', ' : ''}{res.country}</div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <p className="text-[9px] text-slate-500 leading-tight">Pro tip: Plus Codes work globally and are found in Google Maps "Dropped Pin" info.</p>
-                </div>
               )}
               {locationMode === 'manual' && (
                 <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-left-2"><div><label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Latitude</label><input type="number" value={manualCoords.lat} onChange={(e) => setManualCoords({ ...manualCoords, lat: parseFloat(e.target.value) })} className="w-full px-3 py-2 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white font-mono" /></div><div><label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Longitude</label><input type="number" value={manualCoords.long} onChange={(e) => setManualCoords({ ...manualCoords, long: parseFloat(e.target.value) })} className="w-full px-3 py-2 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white font-mono" /></div><button onClick={() => selectLocation({ latitude: manualCoords.lat, longitude: manualCoords.long, name: "Manual", country: "User Set" })} className="col-span-2 py-2 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 text-[10px] font-bold rounded-lg border border-indigo-500/30 transition-all">APPLY COORDINATES</button></div>
