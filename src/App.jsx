@@ -14,7 +14,7 @@ import { useSolarAuth } from './hooks/useSolarAuth';
 import { useFirestoreSync } from './hooks/useFirestoreSync';
 import { useSolarPhysics } from './hooks/useSolarPhysics';
 import { sanitizeString } from './utils/sanitize';
-import { db } from './firebase';
+import { db, logAnalyticsEvent } from './firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 const appId = "solar-forecaster-63320";
@@ -33,42 +33,6 @@ export default function App() {
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackText, setFeedbackText] = useState("");
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
-
-  const submitFeedback = async () => {
-    if (!feedbackText.trim() || !user) return;
-    setIsSubmittingFeedback(true);
-    const sanitizedText = sanitizeString(feedbackText);
-    try {
-      // 1. Still save to Firestore for your permanent logs
-      await addDoc(collection(db, 'feedback'), {
-        userId: user.uid,
-        userEmail: user.email,
-        text: sanitizedText,
-        timestamp: serverTimestamp(),
-        appId: appId,
-        configSummary: {
-          eff: config.eff,
-          stringCount: config.strings?.length
-        }
-      });
-
-      // 2. Open Native Email Client for direct response capability
-      const subject = encodeURIComponent(`Solarcaster Feedback from ${user.email || 'User'}`);
-      const body = encodeURIComponent(`User Feedback:\n"${sanitizedText}"\n\n---\nDebug Info:\nUID: ${user.uid}\nAppID: ${appId}\nEfficiency: ${config.eff * 100}%`);
-      const mailtoLink = `mailto:cobih.obih+solarcaster@gmail.com?subject=${subject}&body=${body}`;
-      
-      window.location.href = mailtoLink;
-
-      setFeedbackText("");
-      setShowFeedback(false);
-      // Removed the alert as the email app opening is confirmation enough
-    } catch (err) {
-      console.error("Feedback failed:", err);
-      alert("Oops! Could't send feedback. Please try again.");
-    } finally {
-      setIsSubmittingFeedback(false);
-    }
-  };
   const [showForecastChart, setShowForecastChart] = useState(false);
   const [selectedDayLabel, setSelectedDayLabel] = useState("");
   const [expandedForecastDay, setExpandedForecastDay] = useState(null);
@@ -80,41 +44,6 @@ export default function App() {
   const [locationMode, setLocationMode] = useState("gps"); // 'gps', 'search', 'plus', 'manual'
   const [manualCoords, setManualCoords] = useState({ lat: 53.3767, long: -6.3286 });
 
-  const detectLocation = () => {
-    if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser");
-      return;
-    }
-
-    setSearchLoading(true);
-    navigator.geolocation.getCurrentPosition(async (position) => {
-      const { latitude, longitude } = position.coords;
-      
-      try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
-        const data = await res.json();
-        const city = data.address.city || data.address.town || data.address.village || data.address.suburb || "Detected Location";
-        
-        saveConfigToCloud({
-          ...config,
-          lat: latitude,
-          long: longitude,
-          locationName: sanitizeString(`${city}, ${data.address.country}`)
-        });
-      } catch (err) {
-        console.error("Reverse geocoding failed:", err);
-        // Fallback to coordinates only
-        saveConfigToCloud({ ...config, lat: latitude, long: longitude, locationName: "GPS Detected" });
-      } finally {
-        setSearchLoading(false);
-      }
-    }, (err) => {
-      console.error("GPS Error:", err);
-      alert("Unable to retrieve your location. Please check permissions or use manual search.");
-      setSearchLoading(false);
-    }, { enableHighAccuracy: true });
-  };
-
   const [visibleSeries, setVisibleSeries] = useState({
     total: true,
     energy: true,
@@ -122,8 +51,20 @@ export default function App() {
     strings: true
   });
 
+  // --- ANALYTICS ---
+  useEffect(() => {
+    logAnalyticsEvent('screen_view', { screen_name: activeTab });
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (user) {
+      logAnalyticsEvent('login', { method: 'google' });
+    }
+  }, [user?.uid]);
+
   const toggleSeries = (key) => {
     setVisibleSeries(prev => ({ ...prev, [key]: !prev[key] }));
+    logAnalyticsEvent('toggle_series', { series: key, visible: !visibleSeries[key] });
   };
 
   const STRING_COLORS = ['#f59e0b', '#ef4444', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'];
@@ -192,25 +133,78 @@ export default function App() {
     }
   };
 
+  const detectLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser");
+      return;
+    }
+    setSearchLoading(true);
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      const { latitude, longitude } = position.coords;
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
+        const data = await res.json();
+        const city = data.address.city || data.address.town || data.address.village || data.address.suburb || "Detected Location";
+        saveConfigToCloud({
+          ...config,
+          lat: latitude,
+          long: longitude,
+          locationName: sanitizeString(`${city}, ${data.address.country}`)
+        });
+        logAnalyticsEvent('location_update', { method: 'gps' });
+      } catch (err) {
+        saveConfigToCloud({ ...config, lat: latitude, long: longitude, locationName: "GPS Detected" });
+      } finally {
+        setSearchLoading(false);
+      }
+    }, (err) => {
+      alert("Unable to retrieve your location.");
+      setSearchLoading(false);
+    }, { enableHighAccuracy: true });
+  };
+
   const selectLocation = (res) => {
-    saveConfigToCloud({ 
-      ...config, 
-      lat: res.latitude, 
-      long: res.longitude,
-      locationName: res.name + (res.admin1 ? ', ' + res.admin1 : '')
-    });
+    saveConfigToCloud({ ...config, lat: res.latitude, long: res.longitude, locationName: res.name + (res.admin1 ? ', ' + res.admin1 : '') });
     setSearchResults([]);
     setAddressQuery("");
+    logAnalyticsEvent('location_update', { method: 'search' });
+  };
+
+  const submitFeedback = async () => {
+    if (!feedbackText.trim() || !user) return;
+    setIsSubmittingFeedback(true);
+    const sanitizedText = sanitizeString(feedbackText);
+    try {
+      await addDoc(collection(db, 'feedback'), {
+        userId: user.uid,
+        userEmail: user.email,
+        text: sanitizedText,
+        timestamp: serverTimestamp(),
+        appId: appId
+      });
+      logAnalyticsEvent('feedback_submitted');
+      const subject = encodeURIComponent(`Solarcaster Feedback`);
+      const body = encodeURIComponent(sanitizedText);
+      window.location.href = `mailto:cobih.obih+solarcaster@gmail.com?subject=${subject}&body=${body}`;
+      setFeedbackText("");
+      setShowFeedback(false);
+    } catch (err) {
+      alert("Oops! Could't send feedback.");
+    } finally {
+      setIsSubmittingFeedback(false);
+    }
   };
 
   const addString = () => {
     const newString = { id: 's' + Date.now(), name: `String ${config.strings.length + 1}`, azimuth: 180, tilt: 35, count: 10 };
     saveConfigToCloud({ ...config, strings: [...config.strings, newString] });
+    logAnalyticsEvent('config_change', { type: 'add_string' });
   };
 
   const removeString = (id) => {
     if (config.strings.length <= 1) return;
     saveConfigToCloud({ ...config, strings: config.strings.filter(s => s.id !== id) });
+    logAnalyticsEvent('config_change', { type: 'remove_string' });
   };
 
   const updateString = (id, field, value) => {
@@ -267,27 +261,17 @@ export default function App() {
             <p className="text-slate-400 text-[10px] md:text-sm mt-1 flex items-center gap-1"><MapPin className="w-3 h-3 text-indigo-400" aria-hidden="true" /> {config.locationName || `${config.lat?.toFixed(2)}°N, ${config.long?.toFixed(2)}°W`}</p>
           </div>
           <div className="flex items-center gap-2 md:gap-3">
-            <button 
-              onClick={() => setShowConfig(!showConfig)} 
-              className={`relative p-2 md:px-4 md:py-2 bg-[#252630] hover:bg-[#2d2e3a] border ${canApply ? 'border-amber-500/50 text-amber-400' : 'border-slate-700 text-slate-300'} rounded-lg flex items-center gap-2 transition-colors text-sm font-medium shadow-sm`}
-            >
+            <button onClick={() => { setShowConfig(!showConfig); logAnalyticsEvent('toggle_config', { open: !showConfig }); }} className={`relative p-2 md:px-4 md:py-2 bg-[#252630] hover:bg-[#2d2e3a] border ${canApply ? 'border-amber-500/50 text-amber-400' : 'border-slate-700 text-slate-300'} rounded-lg flex items-center gap-2 transition-colors text-sm font-medium shadow-sm`}>
               {canApply ? <Activity className="w-4 h-4 animate-pulse" /> : <Settings className="w-4 h-4" />}
               <span className="hidden md:inline">Parameters</span>
               {canApply && <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full border-2 border-[#1a1b23]"></span>}
             </button>
 
-            <button 
-              onClick={() => setShowFeedback(true)}
-              className="p-2 md:px-4 md:py-2 bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 rounded-lg flex items-center gap-2 transition-colors text-sm font-medium shadow-sm"
-              title="Share Feedback"
-            >
-              <MessageSquare className="w-4 h-4" />
-              <span className="hidden md:inline">Feedback</span>
-            </button>
+            <button onClick={() => setShowFeedback(true)} className="p-2 md:px-4 md:py-2 bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 rounded-lg flex items-center gap-2 transition-colors text-sm font-medium shadow-sm"><MessageSquare className="w-4 h-4" /><span className="hidden md:inline">Feedback</span></button>
 
             <div className="flex items-center gap-2 bg-[#252630] p-1 md:pr-3 rounded-full border border-slate-700 shadow-sm">
               {user.photoURL ? <img src={user.photoURL} alt="Profile" className="w-7 h-7 md:w-8 md:h-8 rounded-full border border-slate-600" /> : <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-slate-700 flex items-center justify-center"><User className="w-3 h-3 md:w-4 md:h-4 text-slate-400" /></div>}
-              <button onClick={logout} className="hidden md:block text-slate-400 hover:text-white transition-colors ml-1"><LogOut className="w-4 h-4" /></button>
+              <button onClick={() => { logout(); logAnalyticsEvent('logout'); }} className="hidden md:block text-slate-400 hover:text-white transition-colors ml-1"><LogOut className="w-4 h-4" /></button>
             </div>
           </div>
         </div>
@@ -301,129 +285,40 @@ export default function App() {
 
         {showConfig && (
           <div className="bg-[#252630] p-5 rounded-xl border border-slate-700 shadow-lg animate-in fade-in slide-in-from-top-4 space-y-6">
-
-            {/* LOCATION HUB */}
             <div className="space-y-4 pb-6 border-b border-slate-700/50">
               <div className="flex items-center justify-between">
-                <h4 className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
-                  <MapPin className="w-3 h-3" /> System Location
-                </h4>
+                <h4 className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2"><MapPin className="w-3 h-3" /> System Location</h4>
                 <div className="flex bg-[#1a1b23] p-0.5 rounded-lg border border-slate-800">
                   {['gps', 'search', 'plus', 'manual'].map(mode => (
-                    <button 
-                      key={mode} 
-                      onClick={() => setLocationMode(mode)}
-                      className={`px-2 py-1 text-[8px] font-black uppercase rounded-md transition-all ${locationMode === mode ? 'bg-indigo-600 text-white' : 'text-slate-600'}`}
-                    >
-                      {mode}
-                    </button>
+                    <button key={mode} onClick={() => { setLocationMode(mode); logAnalyticsEvent('change_location_mode', { mode }); }} className={`px-2 py-1 text-[8px] font-black uppercase rounded-md transition-all ${locationMode === mode ? 'bg-indigo-600 text-white' : 'text-slate-600'}`}>{mode}</button>
                   ))}
                 </div>
               </div>
-
               {locationMode === 'gps' && (
-                <div className="animate-in fade-in slide-in-from-left-2">
-                  <button 
-                    onClick={detectLocation}
-                    disabled={searchLoading}
-                    className="w-full py-4 bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/30 rounded-xl flex flex-col items-center justify-center gap-2 transition-all group"
-                  >
-                    <Crosshair className={`w-8 h-8 ${searchLoading ? 'animate-spin text-indigo-400' : 'text-indigo-500 group-hover:scale-110 transition-transform'}`} />
-                    <span className="text-xs font-black text-indigo-400 uppercase tracking-widest">
-                      {searchLoading ? "DetectingRoof..." : "Use Current GPS Location"}
-                    </span>
-                  </button>
-                </div>
+                <div className="animate-in fade-in slide-in-from-left-2"><button onClick={detectLocation} disabled={searchLoading} className="w-full py-4 bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/30 rounded-xl flex flex-col items-center justify-center gap-2 transition-all group"><Crosshair className={`w-8 h-8 ${searchLoading ? 'animate-spin text-indigo-400' : 'text-indigo-500 group-hover:scale-110 transition-transform'}`} /><span className="text-xs font-black text-indigo-400 uppercase tracking-widest">{searchLoading ? "DetectingRoof..." : "Use Current GPS Location"}</span></button></div>
               )}
-
               {locationMode === 'search' && (
-                <div className="relative animate-in fade-in slide-in-from-left-2">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                  <input 
-                    type="text" 
-                    value={addressQuery}
-                    onChange={(e) => searchAddress(e.target.value)}
-                    placeholder="Search address, Eircode, or city..."
-                    className="w-full pl-10 pr-4 py-2.5 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white focus:border-indigo-500 outline-none"
-                  />
-                  {searchLoading && <Activity className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-500 animate-spin" />}
-                  {searchResults.length > 0 && (
-                    <div className="absolute z-50 mt-2 w-full bg-[#1a1b23] border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
-                      {searchResults.map((res) => (
-                        <button key={res.id} onClick={() => selectLocation(res)} className="w-full px-4 py-3 text-left text-sm text-slate-300 hover:bg-indigo-600/20 hover:text-white border-b border-slate-800 last:border-0 transition-colors flex items-center gap-3">
-                          <Navigation className="w-3 h-3 text-indigo-400" />
-                          <div>
-                            <div className="font-bold">{res.name}</div>
-                            <div className="text-[10px] text-slate-500">{res.admin1 ? res.admin1 + ', ' : ''}{res.country}</div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <div className="relative animate-in fade-in slide-in-from-left-2"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" /><input type="text" value={addressQuery} onChange={(e) => searchAddress(e.target.value)} placeholder="Search address, Eircode, or city..." className="w-full pl-10 pr-4 py-2.5 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white focus:border-indigo-500 outline-none" />{searchLoading && <Activity className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-500 animate-spin" />}{searchResults.length > 0 && (<div className="absolute z-50 mt-2 w-full bg-[#1a1b23] border border-slate-700 rounded-xl shadow-2xl overflow-hidden">{searchResults.map((res) => (<button key={res.id} onClick={() => selectLocation(res)} className="w-full px-4 py-3 text-left text-sm text-slate-300 hover:bg-indigo-600/20 hover:text-white border-b border-slate-800 last:border-0 transition-colors flex items-center gap-3"><Navigation className="w-3 h-3 text-indigo-400" /><div><div className="font-bold">{res.name}</div><div className="text-[10px] text-slate-500">{res.admin1 ? res.admin1 + ', ' : ''}{res.country}</div></div></button>))}</div>)}</div>
               )}
-
               {locationMode === 'plus' && (
-                <div className="space-y-2 animate-in fade-in slide-in-from-left-2">
-                  <div className="relative">
-                    <Zap className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-400" />
-                    <input 
-                      type="text" 
-                      placeholder="Paste Google Plus Code (e.g. 8FWM7W3R+GV)"
-                      onBlur={(e) => { if(e.target.value) searchAddress(e.target.value); }}
-                      className="w-full pl-10 pr-4 py-2.5 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white focus:border-indigo-500 outline-none"
-                    />
-                  </div>
-                  <p className="text-[9px] text-slate-500 leading-tight">Pro tip: Plus Codes work globally and are found in Google Maps "Dropped Pin" info.</p>
-                </div>
+                <div className="space-y-2 animate-in fade-in slide-in-from-left-2"><div className="relative"><Zap className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-400" /><input type="text" placeholder="Paste Google Plus Code" onBlur={(e) => { if(e.target.value) searchAddress(e.target.value); }} className="w-full pl-10 pr-4 py-2.5 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white focus:border-indigo-500 outline-none" /></div></div>
               )}
-
               {locationMode === 'manual' && (
-                <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-left-2">
-                  <div>
-                    <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Latitude</label>
-                    <input 
-                      type="number" 
-                      value={manualCoords.lat}
-                      onChange={(e) => setManualCoords({ ...manualCoords, lat: parseFloat(e.target.value) })}
-                      className="w-full px-3 py-2 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Longitude</label>
-                    <input 
-                      type="number" 
-                      value={manualCoords.long}
-                      onChange={(e) => setManualCoords({ ...manualCoords, long: parseFloat(e.target.value) })}
-                      className="w-full px-3 py-2 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white font-mono"
-                    />
-                  </div>
-                  <button 
-                    onClick={() => selectLocation({ latitude: manualCoords.lat, longitude: manualCoords.long, name: "Manual Location", country: "User Set" })}
-                    className="col-span-2 py-2 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 text-[10px] font-bold rounded-lg border border-indigo-500/30 transition-all"
-                  >
-                    APPLY COORDINATES
-                  </button>
-                </div>
+                <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-left-2"><div><label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Latitude</label><input type="number" value={manualCoords.lat} onChange={(e) => setManualCoords({ ...manualCoords, lat: parseFloat(e.target.value) })} className="w-full px-3 py-2 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white font-mono" /></div><div><label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Longitude</label><input type="number" value={manualCoords.long} onChange={(e) => setManualCoords({ ...manualCoords, long: parseFloat(e.target.value) })} className="w-full px-3 py-2 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white font-mono" /></div><button onClick={() => selectLocation({ latitude: manualCoords.lat, longitude: manualCoords.long, name: "Manual", country: "User Set" })} className="col-span-2 py-2 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 text-[10px] font-bold rounded-lg border border-indigo-500/30 transition-all">APPLY COORDINATES</button></div>
               )}
-
-              <div className="flex items-center gap-4 text-[10px] text-slate-400 font-mono bg-[#1a1b23] p-2 rounded-lg border border-slate-800/50">
-                <div className="flex items-center gap-1"><span className="text-slate-600">LAT:</span> <span className="text-white">{config.lat?.toFixed(4)}</span></div>
-                <div className="flex items-center gap-1"><span className="text-slate-600">LON:</span> <span className="text-white">{config.long?.toFixed(4)}</span></div>
-                {config.locationName && <div className="ml-auto text-indigo-400 italic truncate max-w-[150px]">{config.locationName}</div>}
-              </div>
+              <div className="flex items-center gap-4 text-[10px] text-slate-400 font-mono bg-[#1a1b23] p-2 rounded-lg border border-slate-800/50"><div><span className="text-slate-600">LAT:</span> <span className="text-white">{config.lat?.toFixed(4)}</span></div><div><span className="text-slate-600">LON:</span> <span className="text-white">{config.long?.toFixed(4)}</span></div>{config.locationName && <div className="ml-auto text-indigo-400 italic truncate max-w-[150px]">{config.locationName}</div>}</div>
             </div>
-
-            <div className="flex justify-between items-center border-b border-slate-700 pb-4">
-              <h3 className="font-semibold text-white text-sm flex items-center gap-2"><Calculator className="w-4 h-4 text-amber-400" /> String Configuration</h3>              <div className="flex items-center gap-4"><div className="flex items-center gap-2"><label className="text-[10px] text-slate-400 uppercase font-bold">Eff.</label><input type="number" value={config.eff * 100} onChange={e => saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 })} className="w-14 p-1 bg-[#1a1b23] border border-slate-600 rounded text-white text-xs font-mono" /></div><button onClick={addString} className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold flex items-center gap-1"><Plus className="w-3 h-3" /> Add</button></div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {(config.strings || []).map((s, idx) => (
-                <div key={s.id} className="p-4 bg-[#1a1b23] rounded-lg border border-slate-700 relative group"><button onClick={() => removeString(s.id)} className="absolute top-2 right-2 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></button><div className="grid grid-cols-2 gap-3"><div className="col-span-2"><input type="text" value={s.name} onChange={e => updateString(s.id, 'name', e.target.value)} className="w-full bg-transparent border-b border-slate-700 focus:border-indigo-500 outline-none text-sm font-bold text-white py-1" /></div><div><label className="block text-[9px] font-bold text-slate-500 uppercase">Panels</label><input type="number" value={s.count} onChange={e => updateString(s.id, 'count', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded px-2 py-1 text-sm text-white" /></div><div><label className="block text-[9px] font-bold text-slate-500 uppercase">Azimuth</label><input type="number" value={s.azimuth} onChange={e => updateString(s.id, 'azimuth', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded px-2 py-1 text-sm text-white" /></div></div></div>
-              ))}
-            </div>
+            <div className="flex justify-between items-center border-b border-slate-700 pb-4"><h3 className="font-semibold text-white text-sm flex items-center gap-2"><Calculator className="w-4 h-4 text-amber-400" /> String Configuration</h3><div className="flex items-center gap-4"><div className="flex items-center gap-2"><label className="text-[10px] text-slate-400 uppercase font-bold">Eff.</label><input type="number" value={config.eff * 100} onChange={e => { saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 }); logAnalyticsEvent('config_change', { type: 'efficiency' }); }} className="w-14 p-1 bg-[#1a1b23] border border-slate-600 rounded text-white text-xs font-mono" /></div><button onClick={addString} className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold flex items-center gap-1"><Plus className="w-3 h-3" /> Add</button></div></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{(config.strings || []).map((s, idx) => (<div key={s.id} className="p-4 bg-[#1a1b23] rounded-lg border border-slate-700 relative group"><button onClick={() => removeString(s.id)} className="absolute top-2 right-2 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></button><div className="grid grid-cols-2 gap-3"><div className="col-span-2"><input type="text" value={s.name} onChange={e => updateString(s.id, 'name', e.target.value)} className="w-full bg-transparent border-b border-slate-700 focus:border-indigo-500 outline-none text-sm font-bold text-white py-1" /></div><div><label className="block text-[9px] font-bold text-slate-500 uppercase">Panels</label><input type="number" value={s.count} onChange={e => updateString(s.id, 'count', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded px-2 py-1 text-sm text-white" /></div><div><label className="block text-[9px] font-bold text-slate-500 uppercase">Azimuth</label><input type="number" value={s.azimuth} onChange={e => updateString(s.id, 'azimuth', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded px-2 py-1 text-sm text-white" /></div></div></div>))}</div>
             <div className="pt-4 border-t border-slate-700/50 flex justify-between items-center text-xs text-slate-400"><p>Capacity: <strong className="text-white text-sm">{totalCapacity.toFixed(2)} kWp</strong></p><button onClick={logout} className="text-red-400 hover:underline md:hidden">Log Out</button></div>
             <div className="p-2 bg-slate-900/50 rounded border border-slate-800 text-[9px] font-mono text-slate-600"><p>UID: {user?.uid}</p><p>DB: {dbStatus} | Sync: {lastSynced || "Never"}</p></div>
+          </div>
+        )}
+
+        {/* FEEDBACK MODAL */}
+        {showFeedback && (
+          <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-4 bg-[#0f172a]/80 backdrop-blur-sm animate-in fade-in">
+            <div className="w-full max-w-lg bg-[#252630] rounded-2xl border border-slate-700 shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4"><div className="p-6 space-y-4"><div className="flex justify-between items-center"><h3 className="text-lg font-bold text-white flex items-center gap-2"><MessageSquare className="w-5 h-5 text-indigo-400" /> Community Feedback</h3><button onClick={() => setShowFeedback(false)} className="text-slate-500 hover:text-white text-xl">&times;</button></div><textarea value={feedbackText} onChange={(e) => setFeedbackText(e.target.value)} placeholder="Type your feedback here..." className="w-full h-32 p-3 bg-[#1a1b23] border border-slate-600 rounded-xl text-sm text-white focus:border-indigo-500 outline-none resize-none" /><div className="flex gap-3"><button onClick={() => setShowFeedback(false)} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm font-bold transition-all">Cancel</button><button onClick={submitFeedback} disabled={isSubmittingFeedback || !feedbackText.trim()} className="flex-[2] py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition-all shadow-lg">{isSubmittingFeedback ? "Sending..." : "Send Feedback"}</button></div></div></div>
           </div>
         )}
 
@@ -434,189 +329,32 @@ export default function App() {
               <div className="bg-[#252630] p-5 rounded-xl border border-slate-700/50 shadow-sm flex flex-col justify-between">
                 <div><p className="text-slate-400 text-sm font-medium mb-1">Forecast Today</p><div className="flex items-end gap-2"><h2 className="text-3xl font-bold text-white">{todayForecast.yield.toFixed(1)}</h2><span className="text-slate-500 mb-1 font-medium">kWh</span></div></div>
                 <div className="mt-4 space-y-1">
-                  {(config.strings || []).map((s, idx) => (<div key={s.id} className="flex items-center gap-2 text-[10px] text-slate-500"><div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: STRING_COLORS[idx % STRING_COLORS.length] }}></div><span className="truncate flex-1">{s.name}:</span><span className="font-mono">{(todayForecast.strings?.[s.id] || 0).toFixed(1)}</span></div>))}
+                  {(config.strings || []).map((s, idx) => (<div key={s.id} className="flex items-center gap-2 text-[10px] text-slate-500"><div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: STRING_COLORS[idx % STRING_COLORS.length] }}></div><span className="truncate flex-1">{s.name}:</span><Zap className="w-2 h-2 text-indigo-500/50" /><span className="font-mono text-slate-400">{(todayForecast.strings?.[s.id] || 0).toFixed(1)}</span></div>))}
                 </div>
               </div>
               <div className="bg-gradient-to-br from-[#1e293b] to-[#0f172a] p-5 rounded-xl border border-indigo-500/30 shadow-sm flex flex-col justify-between">
-                <div><label className="text-indigo-300 text-sm font-medium mb-1 flex items-center gap-2"><Zap className="w-4 h-4 text-indigo-400" /> Today's Actual</label><div className="mt-2 flex items-center gap-2"><input type="number" value={actuals[todayForecast.dayLabel] || ''} onChange={e => saveActualToCloud(todayForecast.dayLabel, e.target.value)} className="w-full bg-transparent border-b-2 border-indigo-500 p-1 text-3xl font-bold text-white outline-none" step="0.1" placeholder="0.0" /><span className="text-slate-500 font-medium text-xs">kWh</span></div></div>
+                <div><label className="text-indigo-300 text-sm font-medium mb-1 flex items-center gap-2"><Zap className="w-4 h-4 text-indigo-400" /> Today's Actual</label><div className="mt-2 flex items-center gap-2"><input type="number" value={actuals[todayForecast.dayLabel] || ''} onChange={e => { saveActualToCloud(todayForecast.dayLabel, e.target.value); logAnalyticsEvent('actual_entry', { day: 'today' }); }} className="w-full bg-transparent border-b-2 border-indigo-500 p-1 text-3xl font-bold text-white outline-none" step="0.1" placeholder="0.0" /><span className="text-slate-500 font-medium text-xs">kWh</span></div></div>
                 <p className="mt-4 text-[10px] text-slate-500 leading-tight italic">Syncs to cloud for model tuning.</p>
               </div>
               <div className={`p-5 rounded-xl border shadow-sm flex flex-col justify-between ${daysEntered > 0 ? (isAccurate ? 'bg-emerald-900/10 border-emerald-500/20' : 'bg-amber-900/10 border-amber-500/20') : 'bg-[#252630] border-slate-700/50'}`}>
-                <div><p className="text-slate-400 text-sm font-medium mb-1 flex items-center gap-2"><Target className="w-4 h-4" /> Calibration</p>{daysEntered > 0 ? <div className="flex items-end gap-2 mt-2"><h2 className={`text-3xl font-bold ${isAccurate ? 'text-emerald-400' : 'text-amber-400'}`}>{accuracyPercentage}%</h2><span className="text-[10px] text-slate-500 mb-1 uppercase">Accuracy</span></div> : <p className="text-slate-500 text-xs mt-3">Enter data to tune model.</p>}</div>
-                {canApply && <button onClick={() => saveConfigToCloud({ ...config, eff: suggestedEff })} className="mt-3 w-full py-1.5 text-[10px] font-bold rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">APPLY {(suggestedEff * 100).toFixed(1)}% EFF</button>}
+                <div><p className="text-slate-400 text-sm font-medium mb-1 flex items-center gap-2"><Target className="w-4 h-4" /> Calibration</p>{daysEntered > 0 ? <div className="flex items-end gap-2 mt-2"><h2 className={`text-3xl font-bold ${isAccurate ? 'text-emerald-400' : 'text-amber-400'}`}>{accuracyPercentage}%</h2><span className="text-[10px] text-slate-500 mb-1 uppercase tracking-tighter">Accuracy</span></div> : <p className="text-slate-500 text-xs mt-3">Enter data to tune model.</p>}</div>
+                {canApply && <button onClick={() => { saveConfigToCloud({ ...config, eff: suggestedEff }); logAnalyticsEvent('config_change', { type: 'apply_calibration' }); }} className="mt-3 w-full py-1.5 text-[10px] font-bold rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">APPLY CALIBRATION</button>}
               </div>
               <div className="hidden md:flex bg-[#252630] p-5 rounded-xl border border-slate-700/50 shadow-sm flex-col justify-between"><div><p className="text-slate-400 text-sm font-medium mb-1">Forecast Tomorrow</p><div className="flex items-end gap-2"><h2 className="text-3xl font-bold text-white">{tomorrowForecast.yield.toFixed(1)}</h2><span className="text-slate-500 mb-1 font-medium">kWh</span></div></div><div className="mt-4 flex items-center gap-2 text-[10px] text-slate-500"><Calendar className="w-3 h-3 text-blue-400" /> 24h Prediction</div></div>
             </div>
             <div className="bg-[#252630] p-4 md:p-6 rounded-2xl border border-slate-700/50 shadow-lg">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Activity className="w-5 h-5 text-indigo-400" /> Hourly Profile</h2>
-                <div className="flex flex-wrap gap-2">{['clouds', 'total', 'energy', 'strings'].map(key => (<button key={key} onClick={() => toggleSeries(key)} className={`px-2 py-1 rounded text-[9px] font-bold uppercase border transition-all ${visibleSeries[key] ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-transparent border-slate-800 text-slate-600'}`}>{key}</button>))}</div>
-              </div>
-              <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%"><ComposedChart data={selectedDayData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" /><XAxis dataKey="timeLabel" interval={3} stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} /><YAxis stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} /><YAxis yAxisId="right" orientation="right" stroke="#818cf8" fontSize={10} axisLine={false} tickLine={false} unit="kWh" />
-                    <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} content={({ active, payload, label }) => {
-                      if (active && payload && payload.length) return (<div className="bg-[#1e293b] border border-slate-700 p-3 rounded-lg shadow-xl text-[10px] space-y-1"><p className="font-bold text-slate-400 mb-1">{label}</p>{payload.map((entry, idx) => (<div key={idx} className="flex justify-between gap-4"><span style={{ color: entry.color }}>{entry.name}:</span><span className="text-white font-mono">{entry.value} {entry.dataKey === 'cumulativeYield' ? 'kWh' : (entry.dataKey === 'cloudCover' ? '%' : 'kW')}</span></div>))}</div>); return null;
-                    }} />
-                    {visibleSeries.clouds && <Area yAxisId="right" type="monotone" dataKey="cloudCover" name="Cloud %" stroke="none" fill="#475569" fillOpacity={0.1} />}
-                    {visibleSeries.total && <Area type="monotone" dataKey="total" name="Total Power" stroke="#fde047" fill="#fde047" fillOpacity={0.1} strokeWidth={2} />}
-                    {visibleSeries.strings && (config.strings || []).map((s, idx) => <Line key={s.id} type="monotone" dataKey={`stringPowers.${s.id}`} name={s.name} stroke={STRING_COLORS[idx % STRING_COLORS.length]} strokeWidth={1} dot={false} strokeDasharray="5 5" />)}
-                    {visibleSeries.energy && <Line yAxisId="right" type="monotone" dataKey="cumulativeYield" name="Energy" stroke="#818cf8" strokeWidth={3} dot={false} />}
-                    {currentHourTick && <ReferenceLine x={currentHourTick} stroke="#818cf8" strokeDasharray="4 4" />}
-                  </ComposedChart></ResponsiveContainer>
-              </div>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6"><h2 className="text-lg font-semibold text-white flex items-center gap-2"><Activity className="w-5 h-5 text-indigo-400" /> Hourly Profile</h2><div className="flex flex-wrap gap-2">{['clouds', 'total', 'energy', 'strings'].map(key => (<button key={key} onClick={() => toggleSeries(key)} className={`px-2 py-1 rounded text-[9px] font-bold uppercase border transition-all ${visibleSeries[key] ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-transparent border-slate-800 text-slate-600'}`}>{key}</button>))}</div></div>
+              <div className="h-[250px] w-full"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={selectedDayData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" /><XAxis dataKey="timeLabel" interval={3} stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} /><YAxis stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} /><YAxis yAxisId="right" orientation="right" stroke="#818cf8" fontSize={10} axisLine={false} tickLine={false} unit="kWh" /><Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} content={({ active, payload, label }) => { if (active && payload && payload.length) return (<div className="bg-[#1e293b] border border-slate-700 p-3 rounded-lg shadow-xl text-[10px] space-y-1"><p className="font-bold text-slate-400 mb-1">{label}</p>{payload.map((entry, idx) => (<div key={idx} className="flex justify-between gap-4"><span style={{ color: entry.color }}>{entry.name}:</span><span className="text-white font-mono">{entry.value} {entry.dataKey === 'cumulativeYield' ? 'kWh' : (entry.dataKey === 'cloudCover' ? '%' : 'kW')}</span></div>))}</div>); return null; }} />{visibleSeries.clouds && <Area yAxisId="right" type="monotone" dataKey="cloudCover" name="Cloud %" stroke="none" fill="#475569" fillOpacity={0.1} />}{visibleSeries.total && <Area type="monotone" dataKey="total" name="Total Power" stroke="#fde047" fill="#fde047" fillOpacity={0.1} strokeWidth={2} />}{visibleSeries.strings && (config.strings || []).map((s, idx) => <Line key={s.id} type="monotone" dataKey={`stringPowers.${s.id}`} name={s.name} stroke={STRING_COLORS[idx % STRING_COLORS.length]} strokeWidth={1} dot={false} strokeDasharray="5 5" />)}{visibleSeries.energy && <Line yAxisId="right" type="monotone" dataKey="cumulativeYield" name="Energy" stroke="#818cf8" strokeWidth={3} dot={false} />}{currentHourTick && <ReferenceLine x={currentHourTick} stroke="#818cf8" strokeDasharray="4 4" />}</ComposedChart></ResponsiveContainer></div>
             </div>
           </div>
         )}
 
-        {/* --- FORECAST VIEW --- */}
         {activeTab === 'forecast' && (
-          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 pb-8">
-            
-            {/* Chart Toggle */}
-            <div className="bg-[#252630] rounded-2xl border border-slate-700/50 overflow-hidden shadow-lg">
-              <button 
-                onClick={() => setShowForecastChart(!showForecastChart)}
-                className="w-full p-4 flex justify-between items-center hover:bg-[#2d2e3a] transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-indigo-400" />
-                  <h2 className="text-sm font-bold text-white uppercase tracking-wider">Visual Outlook</h2>
-                </div>
-                {showForecastChart ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
-              </button>
-              
-              {showForecastChart && (
-                <div className="p-6 pt-0 animate-in zoom-in-95 duration-200">
-                  <div className="h-[200px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={data} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
-                        <defs><linearGradient id="colorYellow" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#fde047" stopOpacity={0.4} /><stop offset="95%" stopColor="#fde047" stopOpacity={0.0} /></linearGradient></defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
-                        <XAxis dataKey="fullLabel" tickFormatter={(val) => val.split(' ')[0]} interval={23} stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} />
-                        <YAxis stroke="#64748b" fontSize={11} domain={[0, Math.ceil(maxKw)]} axisLine={false} tickLine={false} />
-                        <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} />
-                        <Area type="monotone" dataKey="total" name="Total kW" stroke="#fde047" fill="url(#colorYellow)" strokeWidth={2} />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Daily Summary List (Expandable) */}
-            <div className="grid grid-cols-1 gap-3">
-              {dailyTotals.filter(d => d.dayOffset >= 0).map((day) => {
-                const maxWeekYield = Math.max(...dailyTotals.map(d => d.yield));
-                const relScale = (day.yield / maxWeekYield) * 100;
-                const isVerySunny = day.yield > (maxWeekYield * 0.8);
-                const isCloudy = day.yield < (maxWeekYield * 0.4);
-                const isExpanded = expandedForecastDay === day.dayLabel;
-                
-                // Get data for this specific day
-                const dayHourlyData = data.filter(d => d.dayLabel === day.dayLabel);
-
-                return (
-                  <div key={day.dayLabel} className={`bg-[#252630] rounded-2xl border transition-all duration-300 ${isExpanded ? 'border-indigo-500/50 ring-1 ring-indigo-500/20' : 'border-slate-800'}`}>
-                    <button 
-                      onClick={() => setExpandedForecastDay(isExpanded ? null : day.dayLabel)}
-                      className="w-full p-4 flex items-center gap-4 text-left"
-                    >
-                      <div className="text-center min-w-[56px] border-r border-slate-800 pr-4">
-                        <div className="text-[10px] text-slate-500 uppercase font-black tracking-widest">{day.date.toLocaleDateString([], { weekday: 'short' })}</div>
-                        <div className="text-xl font-black text-white">{day.date.toLocaleDateString([], { day: 'numeric' })}</div>
-                      </div>
-                      
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-end mb-1.5">
-                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Predicted</span>
-                          <span className="text-sm font-black text-white">{day.yield.toFixed(1)} <span className="text-[10px] text-slate-500 font-normal">kWh</span></span>
-                        </div>
-                        <div className="h-2 w-full bg-slate-800/50 rounded-full overflow-hidden">
-                          <div 
-                            className={`h-full rounded-full transition-all duration-1000 ${isVerySunny ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.4)]' : 'bg-indigo-500'}`} 
-                            style={{ width: `${relScale}%` }}
-                          ></div>
-                        </div>
-                      </div>
-
-                      <div className="pl-2 flex flex-col items-center">
-                        {isVerySunny ? <Sun className="w-6 h-6 text-amber-400" /> : isCloudy ? <CloudRain className="w-6 h-6 text-slate-500" /> : <Cloud className="w-6 h-6 text-indigo-400/60" />}
-                        {isExpanded ? <ChevronUp className="w-3 h-3 text-slate-600 mt-1" /> : <ChevronDown className="w-3 h-3 text-slate-600 mt-1" />}
-                      </div>
-                    </button>
-
-                    {isExpanded && (
-                      <div className="p-4 pt-0 animate-in slide-in-from-top-2 duration-300">
-                        <div className="h-[180px] w-full mt-2 bg-[#1a1b23]/50 rounded-xl p-2 border border-slate-800/50">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <ComposedChart data={dayHourlyData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
-                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
-                              <XAxis dataKey="timeLabel" interval={3} stroke="#475569" fontSize={9} axisLine={false} tickLine={false} />
-                              <YAxis stroke="#475569" fontSize={9} axisLine={false} tickLine={false} />
-                              <Area type="monotone" dataKey="total" name="kW" stroke="#fde047" fill="#fde047" fillOpacity={0.1} strokeWidth={2} />
-                              <Line type="monotone" dataKey="cumulativeYield" yAxisId="right" stroke="#818cf8" strokeWidth={2} dot={false} />
-                              <YAxis yAxisId="right" orientation="right" hide={true} />
-                              <Tooltip 
-                                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', fontSize: '10px' }}
-                                itemStyle={{ padding: '2px 0' }}
-                              />
-                            </ComposedChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 pb-8"><div className="bg-[#252630] rounded-2xl border border-slate-700/50 overflow-hidden shadow-lg"><button onClick={() => setShowForecastChart(!showForecastChart)} className="w-full p-4 flex justify-between items-center hover:bg-[#2d2e3a] transition-colors"><div className="flex items-center gap-2"><TrendingUp className="w-5 h-5 text-indigo-400" /><h2 className="text-sm font-bold text-white uppercase tracking-wider">Visual Outlook</h2></div>{showForecastChart ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}</button>{showForecastChart && (<div className="p-6 pt-0 animate-in zoom-in-95 duration-200"><div className="h-[200px] w-full"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}><defs><linearGradient id="colorYellow" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#fde047" stopOpacity={0.4} /><stop offset="95%" stopColor="#fde047" stopOpacity={0.0} /></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" /><XAxis dataKey="fullLabel" tickFormatter={(val) => val.split(' ')[0]} interval={23} stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} /><YAxis stroke="#64748b" fontSize={11} domain={[0, Math.ceil(maxKw)]} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} /><Area type="monotone" dataKey="total" name="Total kW" stroke="#fde047" fill="url(#colorYellow)" strokeWidth={2} /></AreaChart></ResponsiveContainer></div></div>)}</div><div className="grid grid-cols-1 gap-3">{dailyTotals.filter(d => d.dayOffset >= 0).map((day) => { const maxWeekYield = Math.max(...dailyTotals.map(d => d.yield)); const relScale = (day.yield / maxWeekYield) * 100; const isVerySunny = day.yield > (maxWeekYield * 0.8); const isCloudy = day.yield < (maxWeekYield * 0.4); const isExpanded = expandedForecastDay === day.dayLabel; const dayHourlyData = data.filter(d => d.dayLabel === day.dayLabel); return (<div key={day.dayLabel} className={`bg-[#252630] rounded-2xl border transition-all duration-300 ${isExpanded ? 'border-indigo-500/50 ring-1 ring-indigo-500/20' : 'border-slate-800'}`}><button onClick={() => { setExpandedForecastDay(isExpanded ? null : day.dayLabel); logAnalyticsEvent('expand_forecast_day', { day: day.dayLabel }); }} className="w-full p-4 flex items-center gap-4 text-left"><div className="text-center min-w-[56px] border-r border-slate-800 pr-4"><div className="text-[10px] text-slate-500 uppercase font-black tracking-widest">{day.date.toLocaleDateString([], { weekday: 'short' })}</div><div className="text-xl font-black text-white">{day.date.toLocaleDateString([], { day: 'numeric' })}</div></div><div className="flex-1 min-w-0"><div className="flex justify-between items-end mb-1.5"><span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Predicted</span><span className="text-sm font-black text-white">{day.yield.toFixed(1)} <span className="text-[10px] text-slate-500 font-normal">kWh</span></span></div><div className="h-2 w-full bg-slate-800/50 rounded-full overflow-hidden"><div className={`h-full rounded-full transition-all duration-1000 ${isVerySunny ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.4)]' : 'bg-indigo-500'}`} style={{ width: `${relScale}%` }}></div></div></div><div className="pl-2 flex flex-col items-center">{isVerySunny ? <Sun className="w-6 h-6 text-amber-400" /> : isCloudy ? <CloudRain className="w-6 h-6 text-slate-500" /> : <Cloud className="w-6 h-6 text-indigo-400/60" />}{isExpanded ? <ChevronUp className="w-3 h-3 text-slate-600 mt-1" /> : <ChevronDown className="w-3 h-3 text-slate-600 mt-1" />}</div></button>{isExpanded && (<div className="p-4 pt-0 animate-in slide-in-from-top-2 duration-300"><div className="h-[180px] w-full mt-2 bg-[#1a1b23]/50 rounded-xl p-2 border border-slate-800/50"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={dayHourlyData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" /><XAxis dataKey="timeLabel" interval={3} stroke="#475569" fontSize={9} axisLine={false} tickLine={false} /><YAxis stroke="#475569" fontSize={9} axisLine={false} tickLine={false} /><Area type="monotone" dataKey="total" name="kW" stroke="#fde047" fill="#fde047" fillOpacity={0.1} strokeWidth={2} /><Line type="monotone" dataKey="cumulativeYield" yAxisId="right" stroke="#818cf8" strokeWidth={2} dot={false} /><YAxis yAxisId="right" orientation="right" hide={true} /><Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', fontSize: '10px' }} itemStyle={{ padding: '2px 0' }} /></ComposedChart></ResponsiveContainer></div></div>)}</div>); })}</div></div>
         )}
 
         {activeTab === 'history' && (
-          <div className="bg-[#252630] rounded-2xl border border-slate-700/50 overflow-hidden shadow-lg animate-in fade-in slide-in-from-bottom-2">
-            <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-[#1e293b]/50 border-b border-slate-700"><tr className="text-slate-400 uppercase text-[10px] font-bold"><th className="p-4">Date</th><th className="p-4">Model</th><th className="p-4 text-indigo-400">Actual</th></tr></thead><tbody className="text-slate-300 divide-y divide-slate-700/50">{dailyTotals.map((day, i) => (<tr key={i} className="hover:bg-[#2d2e3a] transition-colors"><td className="p-4 font-medium text-xs whitespace-nowrap">{day.date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</td><td className="p-4 font-bold text-white text-xs">{day.yield.toFixed(2)} kWh</td><td className="p-4"><input type="number" value={actuals[day.dayLabel] || ''} onChange={e => saveActualToCloud(day.dayLabel, e.target.value)} className="w-16 h-8 bg-[#1a1b23] border border-slate-600 rounded px-2 text-white text-xs" /></td></tr>))}</tbody></table></div>
-          </div>
-        )}
-
-        {/* FEEDBACK MODAL */}
-        {showFeedback && (
-          <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-4 bg-[#0f172a]/80 backdrop-blur-sm animate-in fade-in">
-            <div className="w-full max-w-lg bg-[#252630] rounded-2xl border border-slate-700 shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4">
-              <div className="p-6 space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                      <MessageSquare className="w-5 h-5 text-indigo-400" />
-                      Community Feedback
-                    </h3>
-                    <button onClick={() => setShowFeedback(false)} className="text-slate-500 hover:text-white text-xl">&times;</button>
-                  </div>
-                  <p className="text-xs text-slate-400 leading-relaxed">
-                    Help us improve Solarcaster. How is the accuracy? Any features you'd like to see?
-                  </p>
-                  <textarea 
-                    value={feedbackText}
-                    onChange={(e) => setFeedbackText(e.target.value)}
-                    placeholder="Type your feedback here..."
-                    className="w-full h-32 p-3 bg-[#1a1b23] border border-slate-600 rounded-xl text-sm text-white focus:border-indigo-500 outline-none transition-all resize-none"
-                  />
-                  <div className="flex gap-3">
-                    <button 
-                      onClick={() => setShowFeedback(false)}
-                      className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm font-bold transition-all"
-                    >
-                      Cancel
-                    </button>
-                    <button 
-                      onClick={submitFeedback}
-                      disabled={isSubmittingFeedback || !feedbackText.trim()}
-                      className="flex-[2] py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:hover:bg-indigo-600 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-500/20"
-                    >
-                      {isSubmittingFeedback ? "Sending..." : "Send Feedback"}
-                    </button>
-                  </div>
-              </div>
-            </div>
-          </div>
+          <div className="bg-[#252630] rounded-2xl border border-slate-700/50 overflow-hidden shadow-lg animate-in fade-in slide-in-from-bottom-2"><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-[#1e293b]/50 border-b border-slate-700"><tr className="text-slate-400 uppercase text-[10px] font-bold"><th className="p-4">Date</th><th className="p-4">Model</th><th className="p-4 text-indigo-400">Actual</th></tr></thead><tbody className="text-slate-300 divide-y divide-slate-700/50">{dailyTotals.map((day, i) => (<tr key={i} className="hover:bg-[#2d2e3a] transition-colors"><td className="p-4 font-medium text-xs whitespace-nowrap">{day.date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</td><td className="p-4 font-bold text-white text-xs">{day.yield.toFixed(2)} kWh</td><td className="p-4"><input type="number" value={actuals[day.dayLabel] || ''} onChange={e => { saveActualToCloud(day.dayLabel, e.target.value); logAnalyticsEvent('actual_entry', { day: 'history' }); }} className="w-16 h-8 bg-[#1a1b23] border border-slate-600 rounded px-2 text-white text-xs" /></td></tr>))}</tbody></table></div></div>
         )}
 
         {/* MOBILE BOTTOM NAV */}
