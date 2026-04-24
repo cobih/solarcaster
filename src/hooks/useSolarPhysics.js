@@ -115,9 +115,10 @@ export const useSolarPhysics = (config, dbSyncing) => {
 
           const itemMidnight = new Date(date.getFullYear(), date.getMonth(), date.getDate());
           const dayOffset = Math.round((itemMidnight - todayMidnight) / (1000 * 60 * 60 * 24));
+          const isoDate = itemMidnight.toISOString().split('T')[0];
           
           if (!totalsByDay[dayLabel]) {
-            totalsByDay[dayLabel] = { date: itemMidnight, dayLabel, dayOffset, yield: 0, strings: {} };
+            totalsByDay[dayLabel] = { date: itemMidnight, dayLabel, isoDate, dayOffset, yield: 0, strings: {} };
           }
           
           processedData.push({
