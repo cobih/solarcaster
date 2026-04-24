@@ -149,11 +149,12 @@ export default function App() {
           ...config,
           lat: latitude,
           long: longitude,
-          locationName: sanitizeString(`${city}, ${data.address.country}`)
+          locationName: sanitizeString(`${city}, ${data.address.country}`),
+          locationSet: true
         });
         logAnalyticsEvent('location_update', { method: 'gps' });
       } catch (err) {
-        saveConfigToCloud({ ...config, lat: latitude, long: longitude, locationName: "GPS Detected" });
+        saveConfigToCloud({ ...config, lat: latitude, long: longitude, locationName: "GPS Detected", locationSet: true });
       } finally {
         setSearchLoading(false);
       }
@@ -164,7 +165,13 @@ export default function App() {
   };
 
   const selectLocation = (res) => {
-    saveConfigToCloud({ ...config, lat: res.latitude, long: res.longitude, locationName: res.name + (res.admin1 ? ', ' + res.admin1 : '') });
+    saveConfigToCloud({ 
+      ...config, 
+      lat: res.latitude, 
+      long: res.longitude,
+      locationName: res.name + (res.admin1 ? ', ' + res.admin1 : ''),
+      locationSet: true // Mark setup as complete
+    });
     setSearchResults([]);
     setAddressQuery("");
     logAnalyticsEvent('location_update', { method: 'search' });
@@ -245,6 +252,57 @@ export default function App() {
         <div className="text-center animate-pulse">
           <Sun className="w-12 h-12 mx-auto mb-4 text-[#fde047] animate-spin-slow" />
           <h2 className="text-xl font-semibold text-slate-400">Loading Solar Physics...</h2>
+        </div>
+      </div>
+    );
+  }
+
+  // --- 4. FIRST-TIME SETUP ---
+  if (!config.locationSet) {
+    return (
+      <div className="min-h-screen bg-[#1a1b23] p-6 flex items-center justify-center">
+        <div className="max-w-xl w-full space-y-8 animate-in fade-in zoom-in-95 duration-500">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-indigo-600/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <MapPin className="w-8 h-8 text-indigo-500" />
+            </div>
+            <h2 className="text-3xl font-black text-white">Set Your Location</h2>
+            <p className="text-slate-400 mt-2">We need your coordinates to calculate the sun's position for your roof.</p>
+          </div>
+
+          <div className="bg-[#252630] p-6 rounded-3xl border border-slate-700 shadow-2xl space-y-6">
+            <div className="flex bg-[#1a1b23] p-1 rounded-xl border border-slate-800">
+              {['gps', 'search', 'manual'].map(mode => (
+                <button key={mode} onClick={() => setLocationMode(mode)} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${locationMode === mode ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-600'}`}>
+                  {mode}
+                </button>
+              ))}
+            </div>
+
+            {locationMode === 'gps' && (
+              <button onClick={detectLocation} disabled={searchLoading} className="w-full py-12 bg-indigo-600/10 hover:bg-indigo-600/20 border-2 border-dashed border-indigo-500/30 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all group">
+                <Crosshair className={`w-12 h-12 ${searchLoading ? 'animate-spin text-indigo-400' : 'text-indigo-500 group-hover:scale-110 transition-transform'}`} />
+                <span className="text-sm font-bold text-indigo-400 uppercase tracking-widest">{searchLoading ? "Locating..." : "Use Current GPS"}</span>
+              </button>
+            )}
+
+            {locationMode === 'search' && (
+              <div className="relative"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" /><input type="text" value={addressQuery} onChange={(e) => searchAddress(e.target.value)} placeholder="Search address or Eircode..." className="w-full pl-12 pr-4 py-4 bg-[#1a1b23] border border-slate-600 rounded-2xl text-white focus:border-indigo-500 outline-none shadow-inner" />
+                {searchLoading && <Activity className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-indigo-500 animate-spin" />}
+                {searchResults.length > 0 && (<div className="absolute z-50 mt-2 w-full bg-[#1a1b23] border border-slate-700 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">{searchResults.map((res) => (<button key={res.id} onClick={() => selectLocation(res)} className="w-full px-5 py-4 text-left hover:bg-indigo-600/20 border-b border-slate-800 last:border-0 transition-colors flex items-center gap-4"><Navigation className="w-4 h-4 text-indigo-400" /><div><div className="font-bold text-white">{res.name}</div><div className="text-[10px] text-slate-500">{res.fullName}</div></div></button>))}</div>)}
+              </div>
+            )}
+
+            {locationMode === 'manual' && (
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-2 ml-1">Latitude</label><input type="number" value={manualCoords.lat} onChange={(e) => setManualCoords({ ...manualCoords, lat: parseFloat(e.target.value) })} className="w-full px-4 py-3 bg-[#1a1b23] border border-slate-600 rounded-xl text-white font-mono" /></div>
+                <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-2 ml-1">Longitude</label><input type="number" value={manualCoords.long} onChange={(e) => setManualCoords({ ...manualCoords, long: parseFloat(e.target.value) })} className="w-full px-4 py-3 bg-[#1a1b23] border border-slate-600 rounded-xl text-white font-mono" /></div>
+                <button onClick={() => selectLocation({ latitude: manualCoords.lat, longitude: manualCoords.long, name: "Manual Location", country: "User Set" })} className="col-span-2 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-lg transition-all active:scale-95">CONFIRM COORDINATES</button>
+              </div>
+            )}
+            
+            <p className="text-center text-[10px] text-slate-500 font-medium italic">You can change this anytime in the parameters panel.</p>
+          </div>
         </div>
       </div>
     );
