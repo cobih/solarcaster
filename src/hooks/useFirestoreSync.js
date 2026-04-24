@@ -38,16 +38,23 @@ export const useFirestoreSync = (user, appId) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
         
-        // Advanced Migration: Ensure all new flags are present
+        // Advanced Migration: Ensure all new fields are present
         const migrated = { ...data };
         if (data.lat !== undefined && data.long !== undefined) migrated.locationSet = true;
-        if (data.strings && data.strings.length > 0) migrated.arraysSet = true;
+        if (data.strings && data.strings.length > 0) {
+           migrated.arraysSet = true;
+           // Ensure each string has a wattage (defaulting to our 465W if missing)
+           migrated.strings = data.strings.map(s => ({
+             ...s,
+             wattage: s.wattage || 465
+           }));
+        }
         
-        // Legacy multi-string migration (if needed)
+        // Legacy multi-string migration
         if (!data.strings && data.eastCount !== undefined) {
           migrated.strings = [
-            { id: 's1', name: "East String", azimuth: 90, tilt: data.tilt || 35, count: data.eastCount || 0 },
-            { id: 's2', name: "West String", azimuth: 270, tilt: data.tilt || 35, count: data.westCount || 0 }
+            { id: 's1', name: "East String", azimuth: 90, tilt: data.tilt || 35, count: data.eastCount || 0, wattage: 465 },
+            { id: 's2', name: "West String", azimuth: 270, tilt: data.tilt || 35, count: data.westCount || 0, wattage: 465 }
           ];
           migrated.arraysSet = true;
         }

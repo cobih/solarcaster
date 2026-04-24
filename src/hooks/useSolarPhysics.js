@@ -97,7 +97,7 @@ export const useSolarPhysics = (config, dbSyncing) => {
 
           // Dynamic multi-string calculation
           (config.strings || []).forEach(s => {
-            const stringCapacity = (s.count * PANEL_WATTAGE) / 1000;
+            const stringCapacity = (s.count * (s.wattage || 465)) / 1000;
             const pwr = calculateArrayPower(dni, dhi, temp, solarPos, s.azimuth, s.tilt, stringCapacity, config.eff);
             totalKw += pwr;
             stringPowers[s.id] = Number(pwr.toFixed(2));
@@ -158,7 +158,7 @@ export const useSolarPhysics = (config, dbSyncing) => {
     return () => clearInterval(intervalId);
   }, [config, dbSyncing]);
 
-  const totalCapacity = (config.strings || []).reduce((acc, s) => acc + (s.count * PANEL_WATTAGE / 1000), 0);
+  const totalCapacity = (config.strings || []).reduce((acc, s) => acc + (s.count * (s.wattage || 465) / 1000), 0);
 
   return { data, dailyTotals, nowLabel, loading, error, totalCapacity };
 };

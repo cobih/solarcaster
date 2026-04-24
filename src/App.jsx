@@ -206,7 +206,7 @@ export default function App() {
   };
 
   const addString = () => {
-    const newString = { id: 's' + Date.now(), name: `String ${config.strings.length + 1}`, azimuth: 180, tilt: 35, count: 10 };
+    const newString = { id: 's' + Date.now(), name: `String ${config.strings.length + 1}`, azimuth: 180, tilt: 35, count: 10, wattage: 465 };
     saveConfigToCloud({ ...config, strings: [...config.strings, newString] });
     logAnalyticsEvent('config_change', { type: 'add_string' });
   };
@@ -348,8 +348,15 @@ export default function App() {
                           <label className="block text-[9px] font-black text-slate-500 uppercase mb-1">String Name</label>
                           <input type="text" value={s.name} onChange={e => updateString(s.id, 'name', e.target.value)} className="w-full bg-transparent border-b border-slate-800 focus:border-indigo-500 outline-none text-white font-bold" />
                         </div>
-                        <div><label className="block text-[9px] font-black text-slate-500 uppercase mb-1">Panel Count</label><input type="number" value={s.count} onChange={e => updateString(s.id, 'count', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-2 text-white" /></div>
-                        <div><label className="block text-[9px] font-black text-slate-500 uppercase mb-1">Azimuth (°)</label><input type="number" value={s.azimuth} onChange={e => updateString(s.id, 'azimuth', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-2 text-white" /></div>
+                        <div><label className="block text-[9px] font-black text-slate-500 uppercase mb-1">Panel Wattage</label>
+                          <input type="number" value={s.wattage || 465} onChange={e => updateString(s.id, 'wattage', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-2 text-white" />
+                        </div>
+                        <div><label className="block text-[9px] font-black text-slate-500 uppercase mb-1">Pitch / Tilt (°)</label>
+                          <input type="number" value={s.tilt} onChange={e => updateString(s.id, 'tilt', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-2 text-white" />
+                        </div>
+                        <div className="col-span-2"><label className="block text-[9px] font-black text-slate-500 uppercase mb-1">Azimuth (°)</label>
+                          <input type="number" value={s.azimuth} onChange={e => updateString(s.id, 'azimuth', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-2 text-white" />
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -442,8 +449,20 @@ export default function App() {
               <div className="flex items-center gap-4 text-[10px] text-slate-400 font-mono bg-[#1a1b23] p-2 rounded-lg border border-slate-800/50"><div><span className="text-slate-600">LAT:</span> <span className="text-white">{config.lat?.toFixed(4)}</span></div><div><span className="text-slate-600">LON:</span> <span className="text-white">{config.long?.toFixed(4)}</span></div>{config.locationName && <div className="ml-auto text-indigo-400 italic truncate max-w-[150px]">{config.locationName}</div>}</div>
             </div>
             <div className="flex justify-between items-center border-b border-slate-700 pb-4"><h3 className="font-semibold text-white text-sm flex items-center gap-2"><Calculator className="w-4 h-4 text-amber-400" /> String Configuration</h3><div className="flex items-center gap-4"><div className="flex items-center gap-2"><label className="text-[10px] text-slate-400 uppercase font-bold">Eff.</label><input type="number" value={config.eff * 100} onChange={e => { saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 }); logAnalyticsEvent('config_change', { type: 'efficiency' }); }} className="w-14 p-1 bg-[#1a1b23] border border-slate-600 rounded text-white text-xs font-mono" /></div><button onClick={addString} className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold flex items-center gap-1"><Plus className="w-3 h-3" /> Add</button></div></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{(config.strings || []).map((s, idx) => (<div key={s.id} className="p-4 bg-[#1a1b23] rounded-lg border border-slate-700 relative group"><button onClick={() => removeString(s.id)} className="absolute top-2 right-2 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></button><div className="grid grid-cols-2 gap-3"><div className="col-span-2"><input type="text" value={s.name} onChange={e => updateString(s.id, 'name', e.target.value)} className="w-full bg-transparent border-b border-slate-700 focus:border-indigo-500 outline-none text-sm font-bold text-white py-1" /></div><div><label className="block text-[9px] font-bold text-slate-500 uppercase">Panels</label><input type="number" value={s.count} onChange={e => updateString(s.id, 'count', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded px-2 py-1 text-sm text-white" /></div><div><label className="block text-[9px] font-bold text-slate-500 uppercase">Azimuth</label><input type="number" value={s.azimuth} onChange={e => updateString(s.id, 'azimuth', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded px-2 py-1 text-sm text-white" /></div></div></div>))}</div>
-            <div className="pt-4 border-t border-slate-700/50 flex justify-between items-center text-xs text-slate-400"><p>Capacity: <strong className="text-white text-sm">{totalCapacity.toFixed(2)} kWp</strong></p><button onClick={logout} className="text-red-400 hover:underline md:hidden">Log Out</button></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {(config.strings || []).map((s, idx) => (
+                <div key={s.id} className="p-4 bg-[#1a1b23] rounded-lg border border-slate-700 relative group">
+                  <button onClick={() => removeString(s.id)} className="absolute top-2 right-2 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></button>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2"><input type="text" value={s.name} onChange={e => updateString(s.id, 'name', e.target.value)} className="w-full bg-transparent border-b border-slate-700 focus:border-indigo-500 outline-none text-sm font-bold text-white py-1" /></div>
+                    <div><label className="block text-[9px] font-bold text-slate-500 uppercase">Panels</label><input type="number" value={s.count} onChange={e => updateString(s.id, 'count', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded px-2 py-1 text-sm text-white" /></div>
+                    <div><label className="block text-[9px] font-bold text-slate-500 uppercase">Wattage</label><input type="number" value={s.wattage || 465} onChange={e => updateString(s.id, 'wattage', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded px-2 py-1 text-sm text-white" /></div>
+                    <div><label className="block text-[9px] font-bold text-slate-500 uppercase">Azimuth</label><input type="number" value={s.azimuth} onChange={e => updateString(s.id, 'azimuth', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded px-2 py-1 text-sm text-white" /></div>
+                    <div><label className="block text-[9px] font-bold text-slate-500 uppercase">Pitch / Tilt</label><input type="number" value={s.tilt} onChange={e => updateString(s.id, 'tilt', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded px-2 py-1 text-sm text-white" /></div>
+                  </div>
+                </div>
+              ))}
+            </div>            <div className="pt-4 border-t border-slate-700/50 flex justify-between items-center text-xs text-slate-400"><p>Capacity: <strong className="text-white text-sm">{totalCapacity.toFixed(2)} kWp</strong></p><button onClick={logout} className="text-red-400 hover:underline md:hidden">Log Out</button></div>
             <div className="p-2 bg-slate-900/50 rounded border border-slate-800 text-[9px] font-mono text-slate-600"><p>UID: {user?.uid}</p><p>DB: {dbStatus} | Sync: {lastSynced || "Never"}</p></div>
           </div>
         )}
