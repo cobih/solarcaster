@@ -37,11 +37,13 @@ export default function App() {
   const submitFeedback = async () => {
     if (!feedbackText.trim() || !user) return;
     setIsSubmittingFeedback(true);
+    const sanitizedText = sanitizeString(feedbackText);
     try {
+      // 1. Still save to Firestore for your permanent logs
       await addDoc(collection(db, 'feedback'), {
         userId: user.uid,
         userEmail: user.email,
-        text: sanitizeString(feedbackText),
+        text: sanitizedText,
         timestamp: serverTimestamp(),
         appId: appId,
         configSummary: {
@@ -49,9 +51,17 @@ export default function App() {
           stringCount: config.strings?.length
         }
       });
+
+      // 2. Open Native Email Client for direct response capability
+      const subject = encodeURIComponent(`Solarcaster Feedback from ${user.email || 'User'}`);
+      const body = encodeURIComponent(`User Feedback:\n"${sanitizedText}"\n\n---\nDebug Info:\nUID: ${user.uid}\nAppID: ${appId}\nEfficiency: ${config.eff * 100}%`);
+      const mailtoLink = `mailto:cobih.obih+solarcaster@gmail.com?subject=${subject}&body=${body}`;
+      
+      window.location.href = mailtoLink;
+
       setFeedbackText("");
       setShowFeedback(false);
-      alert("Thanks for your feedback! The solar community appreciates it.");
+      // Removed the alert as the email app opening is confirmation enough
     } catch (err) {
       console.error("Feedback failed:", err);
       alert("Oops! Could't send feedback. Please try again.");
