@@ -35,6 +35,8 @@ export const sanitizeConfig = (config) => {
     eff: Math.min(1, Math.max(0.1, parseFloat(config.eff) || 0.85)),
     locationName: sanitizeString(config.locationName || "Unknown"),
     locationSet: !!config.locationSet, // Track if user has completed setup
+    arraysSet: !!config.arraysSet,
+    apiEnabled: !!config.apiEnabled,
     schemaVersion: 2, // Force current schema
     strings: (config.strings || []).map(s => ({
       ...s,

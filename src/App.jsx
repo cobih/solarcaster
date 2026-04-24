@@ -23,8 +23,19 @@ export default function App() {
   const { user, authLoading, authError, login, logout } = useSolarAuth();
   const { 
     config, actuals, dbSyncing, dbStatus, lastSynced, 
-    saveConfigToCloud, saveActualToCloud 
+    saveConfigToCloud, saveActualToCloud, publishForecast 
   } = useFirestoreSync(user, appId);
+
+  // ... (existing state)
+
+  // --- PUBLIC API SYNC ---
+  useEffect(() => {
+    if (config.apiEnabled && dailyTotals.length > 0) {
+      publishForecast(dailyTotals);
+    }
+  }, [dailyTotals, config.apiEnabled]);
+
+  // ... rest of component ...
   const { 
     data, dailyTotals, nowLabel, loading, error, totalCapacity 
   } = useSolarPhysics(config, dbSyncing);
@@ -494,8 +505,56 @@ export default function App() {
                   </div>
                 </div>
               ))}
-            </div>            <div className="pt-4 border-t border-slate-700/50 flex justify-between items-center text-xs text-slate-400"><p>Capacity: <strong className="text-white text-sm">{totalCapacity.toFixed(2)} kWp</strong></p><button onClick={logout} className="text-red-400 hover:underline md:hidden">Log Out</button></div>
-            <div className="p-2 bg-slate-900/50 rounded border border-slate-800 text-[9px] font-mono text-slate-600"><p>UID: {user?.uid}</p><p>DB: {dbStatus} | Sync: {lastSynced || "Never"}</p></div>
+            </div>            <div className="pt-4 border-t border-slate-700/50 flex flex-col gap-4">
+              <div className="flex justify-between items-center text-xs text-slate-400">
+                <p>System Capacity: <strong className="text-white text-sm">{totalCapacity.toFixed(2)} kWp</strong></p>
+                <button onClick={logout} className="text-red-400 hover:underline md:hidden">Log Out</button>
+              </div>
+
+              {/* SMART HOME API SECTION */}
+              <div className="bg-[#1a1b23] p-4 rounded-2xl border border-slate-800 space-y-3">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2 text-indigo-400 font-black text-[10px] uppercase tracking-widest">
+                    <Zap className="w-3 h-3" /> External API (Smart Home)
+                  </div>
+                  <button 
+                    onClick={() => saveConfigToCloud({ ...config, apiEnabled: !config.apiEnabled })}
+                    className={`px-3 py-1 rounded-full text-[9px] font-black uppercase transition-all ${config.apiEnabled ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}
+                  >
+                    {config.apiEnabled ? "Enabled" : "Disabled"}
+                  </button>
+                </div>
+                
+                {config.apiEnabled ? (
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-slate-500 leading-tight">Use this URL in Home Assistant or custom scripts to fetch your calibrated forecast:</p>
+                    <div className="flex gap-2">
+                      <input 
+                        readOnly 
+                        value={`https://firestore.googleapis.com/v1/projects/solar-forecaster-63320/databases/(default)/documents/public_forecasts/${user.uid}`}
+                        className="flex-1 bg-black/30 border border-slate-800 rounded px-2 py-1.5 text-[9px] font-mono text-indigo-300 outline-none"
+                      />
+                      <button 
+                        onClick={() => {
+                          navigator.clipboard.writeText(`https://firestore.googleapis.com/v1/projects/solar-forecaster-63320/databases/(default)/documents/public_forecasts/${user.uid}`);
+                          alert("API URL copied to clipboard!");
+                        }}
+                        className="px-2 bg-indigo-600 rounded text-[9px] font-bold text-white uppercase"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[9px] text-slate-600 italic">Enable to generate a public JSON endpoint for your data.</p>
+                )}
+              </div>
+
+              <div className="p-2 bg-slate-900/50 rounded border border-slate-800 text-[9px] font-mono text-slate-600 flex justify-between">
+                <p>UID: {user?.uid.slice(0,8)}...</p>
+                <p>DB: {dbStatus} | Sync: {lastSynced || "Never"}</p>
+              </div>
+            </div>
           </div>
         )}
 

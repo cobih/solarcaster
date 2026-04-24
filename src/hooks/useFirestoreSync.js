@@ -17,6 +17,7 @@ export const useFirestoreSync = (user, appId) => {
     arraysSet: false,
     strings: [],
     effHistory: [], // Track efficiency changes over time
+    apiEnabled: false, // For external integrations
   });
 
   const [actuals, setActuals] = useState({});
@@ -43,14 +44,11 @@ export const useFirestoreSync = (user, appId) => {
         const migrated = { ...data };
         if (data.lat !== undefined && data.long !== undefined) migrated.locationSet = true;
         if (!data.effHistory) migrated.effHistory = [];
+        if (data.apiEnabled === undefined) migrated.apiEnabled = false;
         
         if (data.strings && data.strings.length > 0) {
            migrated.arraysSet = true;
-           // Ensure each string has a wattage (defaulting to our 465W if missing)
-           migrated.strings = data.strings.map(s => ({
-             ...s,
-             wattage: s.wattage || 465
-           }));
+           migrated.strings = data.strings.map(s => ({ ...s, wattage: s.wattage || 465 }));
         }
         
         // Legacy multi-string migration
@@ -87,8 +85,6 @@ export const useFirestoreSync = (user, appId) => {
 
   const saveConfigToCloud = async (newConfig) => {
     const cleanConfig = sanitizeConfig(newConfig);
-    
-    // Efficiency Tracking: If eff changed, record it in history
     if (newConfig.eff !== config.eff) {
       const historyEntry = { 
         val: newConfig.eff, 
@@ -97,7 +93,6 @@ export const useFirestoreSync = (user, appId) => {
       };
       cleanConfig.effHistory = [historyEntry, ...(config.effHistory || [])].slice(0, 50);
     }
-
     setConfig(cleanConfig);
     if (!user) return;
     setDbStatus("Saving Config...");
@@ -128,6 +123,25 @@ export const useFirestoreSync = (user, appId) => {
     }
   };
 
+  const publishForecast = async (dailyTotals) => {
+    if (!user || !config.apiEnabled) return;
+    try {
+      const publicRef = doc(db, 'public_forecasts', user.uid);
+      const summary = dailyTotals.map(d => ({
+        day: d.dayLabel,
+        yield: Number(d.yield.toFixed(2)),
+        offset: d.dayOffset
+      }));
+      await setDoc(publicRef, { 
+        lastUpdate: new Date().toISOString(),
+        forecast: summary,
+        unit: "kWh"
+      });
+    } catch (e) {
+      console.error("Public publish failed:", e);
+    }
+  };
+
   return { 
     config, 
     actuals, 
@@ -135,6 +149,7 @@ export const useFirestoreSync = (user, appId) => {
     dbStatus, 
     lastSynced, 
     saveConfigToCloud, 
-    saveActualToCloud 
+    saveActualToCloud,
+    publishForecast
   };
 };
