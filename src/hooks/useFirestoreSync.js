@@ -16,6 +16,7 @@ export const useFirestoreSync = (user, appId) => {
     locationSet: false,
     arraysSet: false,
     strings: [],
+    effHistory: [], // Track efficiency changes over time
   });
 
   const [actuals, setActuals] = useState({});
@@ -41,6 +42,8 @@ export const useFirestoreSync = (user, appId) => {
         // Advanced Migration: Ensure all new fields are present
         const migrated = { ...data };
         if (data.lat !== undefined && data.long !== undefined) migrated.locationSet = true;
+        if (!data.effHistory) migrated.effHistory = [];
+        
         if (data.strings && data.strings.length > 0) {
            migrated.arraysSet = true;
            // Ensure each string has a wattage (defaulting to our 465W if missing)
@@ -84,6 +87,17 @@ export const useFirestoreSync = (user, appId) => {
 
   const saveConfigToCloud = async (newConfig) => {
     const cleanConfig = sanitizeConfig(newConfig);
+    
+    // Efficiency Tracking: If eff changed, record it in history
+    if (newConfig.eff !== config.eff) {
+      const historyEntry = { 
+        val: newConfig.eff, 
+        date: new Date().toISOString(),
+        label: new Date().toLocaleDateString([], { month: 'short', day: 'numeric' })
+      };
+      cleanConfig.effHistory = [historyEntry, ...(config.effHistory || [])].slice(0, 50);
+    }
+
     setConfig(cleanConfig);
     if (!user) return;
     setDbStatus("Saving Config...");

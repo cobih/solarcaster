@@ -489,7 +489,22 @@ export default function App() {
                 <p className="mt-4 text-[10px] text-slate-500 leading-tight italic">Syncs to cloud for model tuning.</p>
               </div>
               <div className={`p-5 rounded-xl border shadow-sm flex flex-col justify-between ${daysEntered > 0 ? (isAccurate ? 'bg-emerald-900/10 border-emerald-500/20' : 'bg-amber-900/10 border-amber-500/20') : 'bg-[#252630] border-slate-700/50'}`}>
-                <div><p className="text-slate-400 text-sm font-medium mb-1 flex items-center gap-2"><Target className="w-4 h-4" /> Calibration</p>{daysEntered > 0 ? <div className="flex items-end gap-2 mt-2"><h2 className={`text-3xl font-bold ${isAccurate ? 'text-emerald-400' : 'text-amber-400'}`}>{accuracyPercentage}%</h2><span className="text-[10px] text-slate-500 mb-1 uppercase tracking-tighter">Accuracy</span></div> : <p className="text-slate-500 text-xs mt-3">Enter data to tune model.</p>}</div>
+                <div>
+                  <p className="text-slate-400 text-sm font-medium mb-1 flex items-center gap-2"><Target className="w-4 h-4" /> Calibration</p>
+                  {daysEntered > 0 ? (
+                    <div className="space-y-1 mt-2">
+                      <div className="flex items-end gap-2">
+                        <h2 className={`text-3xl font-bold ${isAccurate ? 'text-emerald-400' : 'text-amber-400'}`}>{accuracyPercentage}%</h2>
+                        <span className="text-[10px] text-slate-500 mb-1 uppercase tracking-tighter">Accuracy</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 font-medium">
+                        Delta: <span className={sumActuals > sumModel ? "text-emerald-500" : "text-amber-500"}>
+                          {sumActuals > sumModel ? "+" : ""}{(sumActuals - sumModel).toFixed(2)} kWh
+                        </span> (Actual vs Model)
+                      </p>
+                    </div>
+                  ) : <p className="text-slate-500 text-xs mt-3">Enter data to tune model.</p>}
+                </div>
                 {canApply && <button onClick={() => { saveConfigToCloud({ ...config, eff: suggestedEff }); logAnalyticsEvent('config_change', { type: 'apply_calibration' }); }} className="mt-3 w-full py-1.5 text-[10px] font-bold rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">APPLY CALIBRATION</button>}
               </div>
               <div className="hidden md:flex bg-[#252630] p-5 rounded-xl border border-slate-700/50 shadow-sm flex-col justify-between"><div><p className="text-slate-400 text-sm font-medium mb-1">Forecast Tomorrow</p><div className="flex items-end gap-2"><h2 className="text-3xl font-bold text-white">{tomorrowForecast.yield.toFixed(1)}</h2><span className="text-slate-500 mb-1 font-medium">kWh</span></div></div><div className="mt-4 flex items-center gap-2 text-[10px] text-slate-500"><Calendar className="w-3 h-3 text-blue-400" /> 24h Prediction</div></div>
@@ -506,7 +521,78 @@ export default function App() {
         )}
 
         {activeTab === 'history' && (
-          <div className="bg-[#252630] rounded-2xl border border-slate-700/50 overflow-hidden shadow-lg animate-in fade-in slide-in-from-bottom-2"><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-[#1e293b]/50 border-b border-slate-700"><tr className="text-slate-400 uppercase text-[10px] font-bold"><th className="p-4">Date</th><th className="p-4">Model</th><th className="p-4 text-indigo-400">Actual</th></tr></thead><tbody className="text-slate-300 divide-y divide-slate-700/50">{dailyTotals.map((day, i) => (<tr key={i} className="hover:bg-[#2d2e3a] transition-colors"><td className="p-4 font-medium text-xs whitespace-nowrap">{day.date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</td><td className="p-4 font-bold text-white text-xs">{day.yield.toFixed(2)} kWh</td><td className="p-4"><input type="number" value={actuals[day.dayLabel] || ''} onChange={e => { saveActualToCloud(day.dayLabel, e.target.value); logAnalyticsEvent('actual_entry', { day: 'history' }); }} className="w-16 h-8 bg-[#1a1b23] border border-slate-600 rounded px-2 text-white text-xs" /></td></tr>))}</tbody></table></div></div>
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+            
+            {/* Efficiency Trend Chart */}
+            {config.effHistory?.length > 1 && (
+              <div className="bg-[#252630] p-6 rounded-2xl border border-slate-700/50 shadow-lg">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-emerald-400" />
+                    System Efficiency Trend
+                  </h2>
+                  <div className="text-xs text-slate-500 font-mono">Last 50 Calibrations</div>
+                </div>
+                <div className="h-[150px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={[...config.effHistory].reverse()}>
+                      <defs>
+                        <linearGradient id="colorEff" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
+                      <XAxis dataKey="label" stroke="#475569" fontSize={10} tickLine={false} axisLine={false} />
+                      <YAxis domain={['auto', 'auto']} hide />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+                        formatter={(val) => [(val * 100).toFixed(1) + "%", "Efficiency"]}
+                      />
+                      <Area type="monotone" dataKey="val" stroke="#10b981" fillOpacity={1} fill="url(#colorEff)" strokeWidth={2} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+                <p className="text-[10px] text-slate-500 mt-4 italic text-center">
+                  Tracking your roof's real-world performance as the model auto-calibrates.
+                </p>
+              </div>
+            )}
+
+            <div className="bg-[#252630] rounded-2xl border border-slate-700/50 overflow-hidden shadow-lg">
+              <div className="p-4 border-b border-slate-700/50 flex justify-between items-center bg-[#1e293b]/50">
+                <h2 className="text-sm font-bold text-white uppercase tracking-widest">Historical Production</h2>
+                <span className="text-[10px] text-slate-500 font-mono italic">Enter actual kWh from your inverter</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-[#1e293b]/50 border-b border-slate-700">
+                    <tr className="text-slate-400 uppercase text-[10px] font-bold">
+                      <th className="p-4">Date</th>
+                      {(config.strings || []).map(s => <th key={s.id} className="p-4 hidden md:table-cell">{s.name}</th>)}
+                      <th className="p-4">Model</th>
+                      <th className="p-4 text-indigo-400">Actual</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-slate-300 divide-y divide-slate-700/50">
+                    {dailyTotals.map((day, i) => (
+                      <tr key={i} className="hover:bg-[#2d2e3a] transition-colors">
+                        <td className="p-4 font-medium text-xs whitespace-nowrap">{day.date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</td>
+                        {(config.strings || []).map(s => <td key={s.id} className="p-4 text-slate-500 font-mono text-[10px] hidden md:table-cell">{(day.strings?.[s.id] || 0).toFixed(1)}</td>)}
+                        <td className="p-4 font-bold text-white text-xs">{day.yield.toFixed(2)} kWh</td>
+                        <td className="p-4">
+                          <div className="flex items-center gap-2">
+                             <input type="number" value={actuals[day.dayLabel] || ''} onChange={e => { saveActualToCloud(day.dayLabel, e.target.value); logAnalyticsEvent('actual_entry', { day: 'history' }); }} className="w-16 h-8 bg-[#1a1b23] border border-slate-600 rounded px-2 text-white text-xs" />
+                             <Zap className="w-3 h-3 text-slate-600" />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* MOBILE BOTTOM NAV */}
