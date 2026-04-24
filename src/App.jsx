@@ -568,6 +568,47 @@ export default function App() {
           </div>
         )}
 
+        {/* FEEDBACK MODAL */}
+        {showFeedback && (
+          <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-4 bg-[#0f172a]/80 backdrop-blur-sm animate-in fade-in">
+            <div className="w-full max-w-lg bg-[#252630] rounded-2xl border border-slate-700 shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4">
+              <div className="p-6 space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      <MessageSquare className="w-5 h-5 text-indigo-400" />
+                      Community Feedback
+                    </h3>
+                    <button onClick={() => setShowFeedback(false)} className="text-slate-500 hover:text-white text-xl">&times;</button>
+                  </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Help us improve Solarcaster. How is the accuracy? Any features you'd like to see?
+                  </p>
+                  <textarea 
+                    value={feedbackText}
+                    onChange={(e) => setFeedbackText(e.target.value)}
+                    placeholder="Type your feedback here..."
+                    className="w-full h-32 p-3 bg-[#1a1b23] border border-slate-600 rounded-xl text-sm text-white focus:border-indigo-500 outline-none transition-all resize-none"
+                  />
+                  <div className="flex gap-3">
+                    <button 
+                      onClick={() => setShowFeedback(false)}
+                      className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm font-bold transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      onClick={submitFeedback}
+                      disabled={isSubmittingFeedback || !feedbackText.trim()}
+                      className="flex-[2] py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:hover:bg-indigo-600 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-500/20"
+                    >
+                      {isSubmittingFeedback ? "Sending..." : "Send Feedback"}
+                    </button>
+                  </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* MOBILE BOTTOM NAV */}
         <div className="fixed bottom-0 left-0 right-0 h-16 bg-[#1a1b23]/95 backdrop-blur-md border-t border-slate-800 flex md:hidden items-center justify-around px-6 z-50 pb-safe">
            <button onClick={() => setActiveTab('today')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'today' ? 'text-indigo-400' : 'text-slate-600'}`}><LayoutDashboard className="w-5 h-5" /><span className="text-[9px] font-bold uppercase tracking-tighter">Today</span></button>
