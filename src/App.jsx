@@ -25,17 +25,8 @@ export default function App() {
     config, actuals, dbSyncing, dbStatus, lastSynced, 
     saveConfigToCloud, saveActualToCloud, publishForecast 
   } = useFirestoreSync(user, appId);
-
-  // ... (existing state)
-
-  // --- PUBLIC API SYNC ---
-  useEffect(() => {
-    if (config.apiEnabled && dailyTotals.length > 0) {
-      publishForecast(dailyTotals);
-    }
-  }, [dailyTotals, config.apiEnabled]);
-
-  // ... rest of component ...
+  
+  // FIX: Move hook call UP so dailyTotals is available for code below
   const { 
     data, dailyTotals, nowLabel, loading, error, totalCapacity 
   } = useSolarPhysics(config, dbSyncing);
@@ -48,14 +39,12 @@ export default function App() {
   const [selectedDayLabel, setSelectedDayLabel] = useState("");
   const [expandedForecastDay, setExpandedForecastDay] = useState(null);
   const [activeTab, setActiveTab] = useState("today"); // 'today', 'forecast', 'history'
-  
-  // Onboarding States
-  const [onboardingStep, setOnboardingStep] = useState(1); // 1: Location, 2: Arrays
+  const [onboardingStep, setOnboardingStep] = useState(1);
   const [addressQuery, setAddressQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [lastSearchTime, setLastSearchTime] = useState(0);
-  const [locationMode, setLocationMode] = useState("gps"); // 'gps', 'search', 'plus', 'manual'
+  const [locationMode, setLocationMode] = useState("gps");
   const [manualCoords, setManualCoords] = useState({ lat: 53.3767, long: -6.3286 });
 
   const [visibleSeries, setVisibleSeries] = useState({
@@ -75,6 +64,13 @@ export default function App() {
       logAnalyticsEvent('login', { method: 'google' });
     }
   }, [user?.uid]);
+
+  // --- PUBLIC API SYNC ---
+  useEffect(() => {
+    if (config.apiEnabled && dailyTotals.length > 0) {
+      publishForecast(dailyTotals);
+    }
+  }, [dailyTotals, config.apiEnabled, publishForecast]);
 
   const toggleSeries = (key) => {
     setVisibleSeries(prev => ({ ...prev, [key]: !prev[key] }));
@@ -271,126 +267,44 @@ export default function App() {
     );
   }
 
-  // --- 4. SYSTEM CALIBRATION (ONBOARDING) ---
   if (!config.locationSet || !config.arraysSet) {
     return (
       <div className="min-h-screen bg-[#1a1b23] p-6 flex items-center justify-center overflow-x-hidden">
         <div className="max-w-xl w-full space-y-8 animate-in fade-in zoom-in-95 duration-500">
-          
-          {/* STEP INDICATOR */}
           <div className="flex items-center justify-center gap-4 mb-2">
-            {[1, 2].map(s => (
-              <div key={s} className={`h-1 flex-1 rounded-full transition-all duration-500 ${onboardingStep >= s ? 'bg-indigo-500' : 'bg-slate-800'}`} />
-            ))}
+            {[1, 2].map(s => (<div key={s} className={`h-1 flex-1 rounded-full transition-all duration-500 ${onboardingStep >= s ? 'bg-indigo-500' : 'bg-slate-800'}`} />))}
           </div>
-
           <div className="text-center">
             <h2 className="text-3xl font-black text-white">System Calibration</h2>
-            <p className="text-slate-400 mt-2">
-              {onboardingStep === 1 ? "Step 1: Your Unique Location" : "Step 2: Your Panel Arrays"}
-            </p>
+            <p className="text-slate-400 mt-2">{onboardingStep === 1 ? "Step 1: Your Unique Location" : "Step 2: Your Panel Arrays"}</p>
           </div>
-
           <div className="bg-[#252630] p-6 rounded-3xl border border-slate-700 shadow-2xl space-y-6">
-            
-            {/* STEP 1: LOCATION */}
             {onboardingStep === 1 && (
               <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
                 <div className="flex bg-[#1a1b23] p-1 rounded-xl border border-slate-800">
-                  {['gps', 'search', 'manual'].map(mode => (
-                    <button key={mode} onClick={() => setLocationMode(mode)} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${locationMode === mode ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-600'}`}>
-                      {mode}
-                    </button>
-                  ))}
+                  {['gps', 'search', 'manual'].map(mode => (<button key={mode} onClick={() => setLocationMode(mode)} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${locationMode === mode ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-600'}`}>{mode}</button>))}
                 </div>
-
-                {locationMode === 'gps' && (
-                  <button onClick={detectLocation} disabled={searchLoading} className="w-full py-12 bg-indigo-600/10 hover:bg-indigo-600/20 border-2 border-dashed border-indigo-500/30 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all group">
-                    <Crosshair className={`w-12 h-12 ${searchLoading ? 'animate-spin text-indigo-400' : 'text-indigo-500 group-hover:scale-110 transition-transform'}`} />
-                    <span className="text-sm font-bold text-indigo-400 uppercase tracking-widest">{searchLoading ? "Locating..." : "Use Current GPS"}</span>
-                  </button>
-                )}
-
-                {locationMode === 'search' && (
-                  <div className="relative"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" /><input type="text" value={addressQuery} onChange={(e) => searchAddress(e.target.value)} placeholder="Search address or Eircode..." className="w-full pl-12 pr-4 py-4 bg-[#1a1b23] border border-slate-600 rounded-2xl text-white focus:border-indigo-500 outline-none shadow-inner" />
-                    {searchLoading && <Activity className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-indigo-500 animate-spin" />}
-                    {searchResults.length > 0 && (<div className="absolute z-50 mt-2 w-full bg-[#1a1b23] border border-slate-700 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">{searchResults.map((res) => (<button key={res.id} onClick={() => selectLocation(res)} className="w-full px-5 py-4 text-left hover:bg-indigo-600/20 border-b border-slate-800 last:border-0 transition-colors flex items-center gap-4"><Navigation className="w-4 h-4 text-indigo-400" /><div><div className="font-bold text-white">{res.name}</div><div className="text-[10px] text-slate-500">{res.fullName}</div></div></button>))}</div>)}
-                  </div>
-                )}
-
-                {locationMode === 'manual' && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-2 ml-1">Latitude</label><input type="number" value={manualCoords.lat} onChange={(e) => setManualCoords({ ...manualCoords, lat: parseFloat(e.target.value) })} className="w-full px-4 py-3 bg-[#1a1b23] border border-slate-600 rounded-xl text-white font-mono" /></div>
-                    <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-2 ml-1">Longitude</label><input type="number" value={manualCoords.long} onChange={(e) => setManualCoords({ ...manualCoords, long: parseFloat(e.target.value) })} className="w-full px-4 py-3 bg-[#1a1b23] border border-slate-600 rounded-xl text-white font-mono" /></div>
-                    <button onClick={() => selectLocation({ latitude: manualCoords.lat, longitude: manualCoords.long, name: "Manual Location", country: "User Set" })} className="col-span-2 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-lg transition-all active:scale-95 uppercase tracking-widest">Apply Coordinates</button>
-                  </div>
-                )}
-
-                {config.locationSet && (
-                  <button 
-                    onClick={() => setOnboardingStep(2)}
-                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl flex items-center justify-center gap-2 shadow-xl animate-bounce"
-                  >
-                    Next: Setup Panel Arrays <ArrowRight className="w-5 h-5" />
-                  </button>
-                )}
+                {locationMode === 'gps' && (<button onClick={detectLocation} disabled={searchLoading} className="w-full py-12 bg-indigo-600/10 hover:bg-indigo-600/20 border-2 border-dashed border-indigo-500/30 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all group"><Crosshair className={`w-12 h-12 ${searchLoading ? 'animate-spin text-indigo-400' : 'text-indigo-500 group-hover:scale-110 transition-transform'}`} /><span className="text-sm font-bold text-indigo-400 uppercase tracking-widest">{searchLoading ? "Locating..." : "Use Current GPS"}</span></button>)}
+                {locationMode === 'search' && (<div className="relative"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" /><input type="text" value={addressQuery} onChange={(e) => searchAddress(e.target.value)} placeholder="Search address or Eircode..." className="w-full pl-12 pr-4 py-4 bg-[#1a1b23] border border-slate-600 rounded-2xl text-white focus:border-indigo-500 outline-none shadow-inner" />{searchLoading && <Activity className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-indigo-500 animate-spin" />}{searchResults.length > 0 && (<div className="absolute z-50 mt-2 w-full bg-[#1a1b23] border border-slate-700 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">{searchResults.map((res) => (<button key={res.id} onClick={() => selectLocation(res)} className="w-full px-5 py-4 text-left hover:bg-indigo-600/20 border-b border-slate-800 last:border-0 transition-colors flex items-center gap-4"><Navigation className="w-4 h-4 text-indigo-400" /><div><div className="font-bold text-white">{res.name}</div><div className="text-[10px] text-slate-500">{res.fullName}</div></div></button>))}</div>)}</div>)}
+                {locationMode === 'manual' && (<div className="grid grid-cols-2 gap-4"><div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-2 ml-1">Latitude</label><input type="number" value={manualCoords.lat} onChange={(e) => setManualCoords({ ...manualCoords, lat: parseFloat(e.target.value) })} className="w-full px-4 py-3 bg-[#1a1b23] border border-slate-600 rounded-xl text-white font-mono" /></div><div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-2 ml-1">Longitude</label><input type="number" value={manualCoords.long} onChange={(e) => setManualCoords({ ...manualCoords, long: parseFloat(e.target.value) })} className="w-full px-4 py-3 bg-[#1a1b23] border border-slate-600 rounded-xl text-white font-mono" /></div><button onClick={() => selectLocation({ latitude: manualCoords.lat, longitude: manualCoords.long, name: "Manual Location", country: "User Set" })} className="col-span-2 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-lg transition-all active:scale-95 uppercase tracking-widest">Apply Coordinates</button></div>)}
+                {config.locationSet && (<button onClick={() => setOnboardingStep(2)} className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl flex items-center justify-center gap-2 shadow-xl animate-bounce">Next: Setup Panel Arrays <ArrowRight className="w-5 h-5" /></button>)}
               </div>
             )}
-
-            {/* STEP 2: ARRAYS */}
             {onboardingStep === 2 && (
               <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2"><Calculator className="w-4 h-4 text-amber-400" /> Define Strings</h3>
-                  <button onClick={addString} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center gap-2 transition-all"><Plus className="w-3 h-3" /> Add String</button>
-                </div>
-
+                <div className="flex justify-between items-center"><h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2"><Calculator className="w-4 h-4 text-amber-400" /> Define Strings</h3><button onClick={addString} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center gap-2 transition-all"><Plus className="w-3 h-3" /> Add String</button></div>
                 <div className="max-h-[300px] overflow-y-auto space-y-3 pr-2 custom-scrollbar">
-                  {config.strings.length === 0 && (
-                    <div className="py-12 text-center border-2 border-dashed border-slate-800 rounded-2xl">
-                      <p className="text-xs text-slate-600 font-bold uppercase tracking-widest">No strings added yet</p>
-                    </div>
-                  )}
+                  {config.strings.length === 0 && (<div className="py-12 text-center border-2 border-dashed border-slate-800 rounded-2xl"><p className="text-xs text-slate-600 font-bold uppercase tracking-widest">No strings added yet</p></div>)}
                   {config.strings.map((s, idx) => (
                     <div key={s.id} className="p-4 bg-[#1a1b23] rounded-2xl border border-slate-700 relative group animate-in slide-in-from-bottom-2">
                       <button onClick={() => removeString(s.id)} className="absolute top-3 right-3 text-slate-600 hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4" /></button>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="col-span-2">
-                          <label className="block text-[9px] font-black text-slate-500 uppercase mb-1">String Name</label>
-                          <input type="text" value={s.name} onChange={e => updateString(s.id, 'name', e.target.value)} className="w-full bg-transparent border-b border-slate-800 focus:border-indigo-500 outline-none text-white font-bold" />
-                        </div>
-                        <div><label className="block text-[9px] font-black text-slate-500 uppercase mb-1">Panel Wattage</label>
-                          <input type="number" value={s.wattage || 465} onChange={e => updateString(s.id, 'wattage', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-2 text-white" />
-                        </div>
-                        <div><label className="block text-[9px] font-black text-slate-500 uppercase mb-1">Pitch / Tilt (°)</label>
-                          <input type="number" value={s.tilt} onChange={e => updateString(s.id, 'tilt', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-2 text-white" />
-                        </div>
-                        <div className="col-span-2"><label className="block text-[9px] font-black text-slate-500 uppercase mb-1">Azimuth (°)</label>
-                          <input type="number" value={s.azimuth} onChange={e => updateString(s.id, 'azimuth', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-2 text-white" />
-                        </div>
-                      </div>
+                      <div className="grid grid-cols-2 gap-4"><div className="col-span-2"><label className="block text-[9px] font-black text-slate-500 uppercase mb-1">String Name</label><input type="text" value={s.name} onChange={e => updateString(s.id, 'name', e.target.value)} className="w-full bg-transparent border-b border-slate-800 focus:border-indigo-500 outline-none text-white font-bold" /></div><div><label className="block text-[9px] font-black text-slate-500 uppercase mb-1">Panel Wattage</label><input type="number" value={s.wattage || 465} onChange={e => updateString(s.id, 'wattage', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-2 text-white" /></div><div><label className="block text-[9px] font-black text-slate-500 uppercase mb-1">Pitch / Tilt (°)</label><input type="number" value={s.tilt} onChange={e => updateString(s.id, 'tilt', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-2 text-white" /></div><div className="col-span-2"><label className="block text-[9px] font-black text-slate-500 uppercase mb-1">Azimuth (°)</label><input type="number" value={s.azimuth} onChange={e => updateString(s.id, 'azimuth', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-2 text-white" /></div></div>
                     </div>
                   ))}
                 </div>
-
-                {config.strings.length > 0 && (
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center text-xs text-slate-400 px-2">
-                      <span>Total System Capacity:</span>
-                      <strong className="text-white text-lg font-black">{totalCapacity.toFixed(2)} <span className="text-xs font-normal text-slate-500">kWp</span></strong>
-                    </div>
-                    <button 
-                      onClick={() => saveConfigToCloud({ ...config, arraysSet: true })}
-                      className="w-full py-5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl flex items-center justify-center gap-3 shadow-xl transition-all active:scale-95"
-                    >
-                      <Zap className="w-6 h-6 animate-pulse" /> FINISH CALIBRATION
-                    </button>
-                    <button onClick={() => setOnboardingStep(1)} className="w-full py-2 text-[10px] text-slate-600 font-bold uppercase hover:text-slate-400 transition-colors">Back to location</button>
-                  </div>
-                )}
+                {config.strings.length > 0 && (<div className="space-y-4"><div className="flex justify-between items-center text-xs text-slate-400 px-2"><span>Total System Capacity:</span><strong className="text-white text-lg font-black">{totalCapacity.toFixed(2)} <span className="text-xs font-normal text-slate-500">kWp</span></strong></div><button onClick={() => saveConfigToCloud({ ...config, arraysSet: true })} className="w-full py-5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl flex items-center justify-center gap-3 shadow-xl transition-all active:scale-95"><Zap className="w-6 h-6 animate-pulse" /> FINISH CALIBRATION</button><button onClick={() => setOnboardingStep(1)} className="w-full py-2 text-[10px] text-slate-600 font-bold uppercase hover:text-slate-400 transition-colors">Back to location</button></div>)}
               </div>
             )}
-            
             <p className="text-center text-[10px] text-slate-500 font-medium italic">Everything is saved securely to your private cloud profile.</p>
           </div>
         </div>
@@ -438,25 +352,13 @@ export default function App() {
                 <h4 className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2"><MapPin className="w-3 h-3" /> System Location</h4>
                 <div className="flex bg-[#1a1b23] p-0.5 rounded-lg border border-slate-800">
                   {['gps', 'search', 'manual'].map(mode => (
-                    <button 
-                      key={mode} 
-                      onClick={() => { setLocationMode(mode); logAnalyticsEvent('change_location_mode', { mode }); }}
-                      className={`px-2 py-1 text-[8px] font-black uppercase rounded-md transition-all ${locationMode === mode ? 'bg-indigo-600 text-white' : 'text-slate-600'}`}
-                    >
-                      {mode}
-                    </button>
+                    <button key={mode} onClick={() => { setLocationMode(mode); logAnalyticsEvent('change_location_mode', { mode }); }} className={`px-2 py-1 text-[8px] font-black uppercase rounded-md transition-all ${locationMode === mode ? 'bg-indigo-600 text-white' : 'text-slate-600'}`}>{mode}</button>
                   ))}
                 </div>
               </div>
-              {locationMode === 'gps' && (
-                <div className="animate-in fade-in slide-in-from-left-2"><button onClick={detectLocation} disabled={searchLoading} className="w-full py-4 bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/30 rounded-xl flex flex-col items-center justify-center gap-2 transition-all group"><Crosshair className={`w-8 h-8 ${searchLoading ? 'animate-spin text-indigo-400' : 'text-indigo-500 group-hover:scale-110 transition-transform'}`} /><span className="text-xs font-black text-indigo-400 uppercase tracking-widest">{searchLoading ? "DetectingRoof..." : "Use Current GPS Location"}</span></button></div>
-              )}
-              {locationMode === 'search' && (
-                <div className="relative animate-in fade-in slide-in-from-left-2"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" /><input type="text" value={addressQuery} onChange={(e) => searchAddress(e.target.value)} placeholder="Search address, Eircode, or city..." className="w-full pl-10 pr-4 py-2.5 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white focus:border-indigo-500 outline-none" />{searchLoading && <Activity className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-500 animate-spin" />}{searchResults.length > 0 && (<div className="absolute z-50 mt-2 w-full bg-[#1a1b23] border border-slate-700 rounded-xl shadow-2xl overflow-hidden">{searchResults.map((res) => (<button key={res.id} onClick={() => selectLocation(res)} className="w-full px-4 py-3 text-left text-sm text-slate-300 hover:bg-indigo-600/20 hover:text-white border-b border-slate-800 last:border-0 transition-colors flex items-center gap-3"><Navigation className="w-3 h-3 text-indigo-400" /><div><div className="font-bold">{res.name}</div><div className="text-[10px] text-slate-500">{res.admin1 ? res.admin1 + ', ' : ''}{res.country}</div></div></button>))}</div>)}</div>
-              )}
-              {locationMode === 'manual' && (
-                <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-left-2"><div><label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Latitude</label><input type="number" value={manualCoords.lat} onChange={(e) => setManualCoords({ ...manualCoords, lat: parseFloat(e.target.value) })} className="w-full px-3 py-2 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white font-mono" /></div><div><label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Longitude</label><input type="number" value={manualCoords.long} onChange={(e) => setManualCoords({ ...manualCoords, long: parseFloat(e.target.value) })} className="w-full px-3 py-2 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white font-mono" /></div><button onClick={() => selectLocation({ latitude: manualCoords.lat, longitude: manualCoords.long, name: "Manual", country: "User Set" })} className="col-span-2 py-2 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 text-[10px] font-bold rounded-lg border border-indigo-500/30 transition-all">APPLY COORDINATES</button></div>
-              )}
+              {locationMode === 'gps' && (<div className="animate-in fade-in slide-in-from-left-2"><button onClick={detectLocation} disabled={searchLoading} className="w-full py-4 bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/30 rounded-xl flex flex-col items-center justify-center gap-2 transition-all group"><Crosshair className={`w-8 h-8 ${searchLoading ? 'animate-spin text-indigo-400' : 'text-indigo-500 group-hover:scale-110 transition-transform'}`} /><span className="text-xs font-black text-indigo-400 uppercase tracking-widest">{searchLoading ? "DetectingRoof..." : "Use Current GPS Location"}</span></button></div>)}
+              {locationMode === 'search' && (<div className="relative animate-in fade-in slide-in-from-left-2"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" /><input type="text" value={addressQuery} onChange={(e) => searchAddress(e.target.value)} placeholder="Search address, Eircode, or city..." className="w-full pl-10 pr-4 py-2.5 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white focus:border-indigo-500 outline-none" />{searchLoading && <Activity className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-500 animate-spin" />}{searchResults.length > 0 && (<div className="absolute z-50 mt-2 w-full bg-[#1a1b23] border border-slate-700 rounded-xl shadow-2xl overflow-hidden">{searchResults.map((res) => (<button key={res.id} onClick={() => selectLocation(res)} className="w-full px-4 py-3 text-left text-sm text-slate-300 hover:bg-indigo-600/20 hover:text-white border-b border-slate-800 last:border-0 transition-colors flex items-center gap-3"><Navigation className="w-3 h-3 text-indigo-400" /><div><div className="font-bold">{res.name}</div><div className="text-[10px] text-slate-500">{res.admin1 ? res.admin1 + ', ' : ''}{res.country}</div></div></button>))}</div>)}</div>)}
+              {locationMode === 'manual' && (<div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-left-2"><div><label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Latitude</label><input type="number" value={manualCoords.lat} onChange={(e) => setManualCoords({ ...manualCoords, lat: parseFloat(e.target.value) })} className="w-full px-3 py-2 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white font-mono" /></div><div><label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Longitude</label><input type="number" value={manualCoords.long} onChange={(e) => setManualCoords({ ...manualCoords, long: parseFloat(e.target.value) })} className="w-full px-3 py-2 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white font-mono" /></div><button onClick={() => selectLocation({ latitude: manualCoords.lat, longitude: manualCoords.long, name: "Manual", country: "User Set" })} className="col-span-2 py-2 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 text-[10px] font-bold rounded-lg border border-indigo-500/30 transition-all">APPLY COORDINATES</button></div>)}
               <div className="flex items-center gap-4 text-[10px] text-slate-400 font-mono bg-[#1a1b23] p-2 rounded-lg border border-slate-800/50"><div><span className="text-slate-600">LAT:</span> <span className="text-white">{config.lat?.toFixed(4)}</span></div><div><span className="text-slate-600">LON:</span> <span className="text-white">{config.long?.toFixed(4)}</span></div>{config.locationName && <div className="ml-auto text-indigo-400 italic truncate max-w-[150px]">{config.locationName}</div>}</div>
             </div>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-700 pb-4 gap-4">
@@ -464,22 +366,8 @@ export default function App() {
               <div className="flex items-center gap-4 w-full md:w-auto">
                 <div className="flex flex-1 items-center gap-3 bg-[#1a1b23] p-2 rounded-xl border border-slate-800">
                    <label className="text-[9px] font-black text-slate-500 uppercase">Efficiency</label>
-                   <input 
-                     type="range" 
-                     min="10" max="100" 
-                     value={config.eff * 100} 
-                     onChange={e => { saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 }); }}
-                     className="flex-1 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500" 
-                   />
-                   <div className="flex items-center gap-1 min-w-[45px]">
-                     <input 
-                       type="number" 
-                       value={Math.round(config.eff * 100)} 
-                       onChange={e => { saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 }); }}
-                       className="w-8 bg-transparent text-indigo-400 text-xs font-bold font-mono outline-none" 
-                     />
-                     <span className="text-[10px] text-slate-600">%</span>
-                   </div>
+                   <input type="range" min="10" max="100" value={config.eff * 100} onChange={e => { saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 }); }} className="flex-1 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
+                   <div className="flex items-center gap-1 min-w-[45px]"><input type="number" value={Math.round(config.eff * 100)} onChange={e => { saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 }); }} className="w-8 bg-transparent text-indigo-400 text-xs font-bold font-mono outline-none" /><span className="text-[10px] text-slate-600">%</span></div>
                 </div>
                 <button onClick={addString} className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/20"><Plus className="w-4 h-4" /> Add String</button>
               </div>
@@ -489,13 +377,7 @@ export default function App() {
                 <div key={s.id} className="p-4 bg-[#1a1b23] rounded-2xl border border-slate-700 relative group animate-in slide-in-from-bottom-2">
                   <div className="flex justify-between items-center mb-3">
                     <input type="text" value={s.name} onChange={e => updateString(s.id, 'name', e.target.value)} className="bg-transparent border-b border-slate-800 focus:border-indigo-500 outline-none text-white font-bold text-sm py-1" />
-                    <button 
-                      onClick={() => removeString(s.id)} 
-                      className="p-2 bg-red-900/10 hover:bg-red-900/30 text-red-500 rounded-lg flex items-center gap-1 transition-colors border border-red-500/10"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                      <span className="text-[8px] font-black uppercase">Remove</span>
-                    </button>
+                    <button onClick={() => removeString(s.id)} className="p-2 bg-red-900/10 hover:bg-red-900/30 text-red-500 rounded-lg flex items-center gap-1 transition-colors border border-red-500/10"><Trash2 className="w-3 h-3" /><span className="text-[8px] font-black uppercase">Remove</span></button>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div><label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Panels</label><input type="number" value={s.count} onChange={e => updateString(s.id, 'count', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white" /></div>
@@ -505,55 +387,11 @@ export default function App() {
                   </div>
                 </div>
               ))}
-            </div>            <div className="pt-4 border-t border-slate-700/50 flex flex-col gap-4">
-              <div className="flex justify-between items-center text-xs text-slate-400">
-                <p>System Capacity: <strong className="text-white text-sm">{totalCapacity.toFixed(2)} kWp</strong></p>
-                <button onClick={logout} className="text-red-400 hover:underline md:hidden">Log Out</button>
-              </div>
-
-              {/* SMART HOME API SECTION */}
-              <div className="bg-[#1a1b23] p-4 rounded-2xl border border-slate-800 space-y-3">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-2 text-indigo-400 font-black text-[10px] uppercase tracking-widest">
-                    <Zap className="w-3 h-3" /> External API (Smart Home)
-                  </div>
-                  <button 
-                    onClick={() => saveConfigToCloud({ ...config, apiEnabled: !config.apiEnabled })}
-                    className={`px-3 py-1 rounded-full text-[9px] font-black uppercase transition-all ${config.apiEnabled ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}
-                  >
-                    {config.apiEnabled ? "Enabled" : "Disabled"}
-                  </button>
-                </div>
-                
-                {config.apiEnabled ? (
-                  <div className="space-y-2">
-                    <p className="text-[10px] text-slate-500 leading-tight">Use this URL in Home Assistant or custom scripts to fetch your calibrated forecast:</p>
-                    <div className="flex gap-2">
-                      <input 
-                        readOnly 
-                        value={`https://firestore.googleapis.com/v1/projects/solar-forecaster-63320/databases/(default)/documents/public_forecasts/${user.uid}`}
-                        className="flex-1 bg-black/30 border border-slate-800 rounded px-2 py-1.5 text-[9px] font-mono text-indigo-300 outline-none"
-                      />
-                      <button 
-                        onClick={() => {
-                          navigator.clipboard.writeText(`https://firestore.googleapis.com/v1/projects/solar-forecaster-63320/databases/(default)/documents/public_forecasts/${user.uid}`);
-                          alert("API URL copied to clipboard!");
-                        }}
-                        className="px-2 bg-indigo-600 rounded text-[9px] font-bold text-white uppercase"
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-[9px] text-slate-600 italic">Enable to generate a public JSON endpoint for your data.</p>
-                )}
-              </div>
-
-              <div className="p-2 bg-slate-900/50 rounded border border-slate-800 text-[9px] font-mono text-slate-600 flex justify-between">
-                <p>UID: {user?.uid.slice(0,8)}...</p>
-                <p>DB: {dbStatus} | Sync: {lastSynced || "Never"}</p>
-              </div>
+            </div>
+            <div className="pt-4 border-t border-slate-700/50 flex flex-col gap-4">
+              <div className="flex justify-between items-center text-xs text-slate-400"><p>System Capacity: <strong className="text-white text-sm">{totalCapacity.toFixed(2)} kWp</strong></p><button onClick={logout} className="text-red-400 hover:underline md:hidden">Log Out</button></div>
+              <div className="bg-[#1a1b23] p-4 rounded-2xl border border-slate-800 space-y-3"><div className="flex justify-between items-center"><div className="flex items-center gap-2 text-indigo-400 font-black text-[10px] uppercase tracking-widest"><Zap className="w-3 h-3" /> External API (Smart Home)</div><button onClick={() => saveConfigToCloud({ ...config, apiEnabled: !config.apiEnabled })} className={`px-3 py-1 rounded-full text-[9px] font-black uppercase transition-all ${config.apiEnabled ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}>{config.apiEnabled ? "Enabled" : "Disabled"}</button></div>{config.apiEnabled ? (<div className="space-y-2"><p className="text-[10px] text-slate-500 leading-tight">Home Assistant URL:</p><div className="flex gap-2"><input readOnly value={`https://firestore.googleapis.com/v1/projects/solar-forecaster-63320/databases/(default)/documents/public_forecasts/${user.uid}`} className="flex-1 bg-black/30 border border-slate-800 rounded px-2 py-1.5 text-[9px] font-mono text-indigo-300 outline-none" /><button onClick={() => { navigator.clipboard.writeText(`https://firestore.googleapis.com/v1/projects/solar-forecaster-63320/databases/(default)/documents/public_forecasts/${user.uid}`); alert("API URL copied!"); }} className="px-2 bg-indigo-600 rounded text-[9px] font-bold text-white uppercase">Copy</button></div></div>) : (<p className="text-[9px] text-slate-600 italic">Enable for public JSON endpoint.</p>)}</div>
+              <div className="p-2 bg-slate-900/50 rounded border border-slate-800 text-[9px] font-mono text-slate-600 flex justify-between"><p>UID: {user?.uid.slice(0,8)}...</p><p>DB: {dbStatus} | Sync: {lastSynced || "Never"}</p></div>
             </div>
           </div>
         )}
@@ -584,15 +422,8 @@ export default function App() {
                   <p className="text-slate-400 text-sm font-medium mb-1 flex items-center gap-2"><Target className="w-4 h-4" /> Calibration</p>
                   {daysEntered > 0 ? (
                     <div className="space-y-1 mt-2">
-                      <div className="flex items-end gap-2">
-                        <h2 className={`text-3xl font-bold ${isAccurate ? 'text-emerald-400' : 'text-amber-400'}`}>{accuracyPercentage}%</h2>
-                        <span className="text-[10px] text-slate-500 mb-1 uppercase tracking-tighter">Accuracy</span>
-                      </div>
-                      <p className="text-[10px] text-slate-500 font-medium">
-                        Delta: <span className={sumActuals > sumModel ? "text-emerald-500" : "text-amber-500"}>
-                          {sumActuals > sumModel ? "+" : ""}{(sumActuals - sumModel).toFixed(2)} kWh
-                        </span> (Actual vs Model)
-                      </p>
+                      <div className="flex items-end gap-2"><h2 className={`text-3xl font-bold ${isAccurate ? 'text-emerald-400' : 'text-amber-400'}`}>{accuracyPercentage}%</h2><span className="text-[10px] text-slate-500 mb-1 uppercase tracking-tighter">Accuracy</span></div>
+                      <p className="text-[10px] text-slate-500 font-medium">Delta: <span className={sumActuals > sumModel ? "text-emerald-500" : "text-amber-500"}>{sumActuals > sumModel ? "+" : ""}{(sumActuals - sumModel).toFixed(2)} kWh</span></p>
                     </div>
                   ) : <p className="text-slate-500 text-xs mt-3">Enter data to tune model.</p>}
                 </div>
@@ -613,80 +444,16 @@ export default function App() {
 
         {activeTab === 'history' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
-            
-            {/* Efficiency Trend Chart */}
             {config.effHistory?.length > 1 && (
               <div className="bg-[#252630] p-6 rounded-2xl border border-slate-700/50 shadow-lg">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-emerald-400" />
-                    System Efficiency Trend
-                  </h2>
-                  <div className="text-xs text-slate-500 font-mono">Last 50 Calibrations</div>
-                </div>
-                <div className="h-[150px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={[...config.effHistory].reverse()}>
-                      <defs>
-                        <linearGradient id="colorEff" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
-                      <XAxis dataKey="label" stroke="#475569" fontSize={10} tickLine={false} axisLine={false} />
-                      <YAxis domain={['auto', 'auto']} hide />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
-                        formatter={(val) => [(val * 100).toFixed(1) + "%", "Efficiency"]}
-                      />
-                      <Area type="monotone" dataKey="val" stroke="#10b981" fillOpacity={1} fill="url(#colorEff)" strokeWidth={2} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-                <p className="text-[10px] text-slate-500 mt-4 italic text-center">
-                  Tracking your roof's real-world performance as the model auto-calibrates.
-                </p>
+                <div className="flex justify-between items-center mb-6"><h2 className="text-lg font-semibold text-white flex items-center gap-2"><TrendingUp className="w-5 h-5 text-emerald-400" />System Efficiency Trend</h2><div className="text-xs text-slate-500 font-mono">Last 50 Calibrations</div></div>
+                <div className="h-[150px] w-full"><ResponsiveContainer width="100%" height="100%"><AreaChart data={[...config.effHistory].reverse()}><defs><linearGradient id="colorEff" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" /><XAxis dataKey="label" stroke="#475569" fontSize={10} tickLine={false} axisLine={false} /><YAxis domain={['auto', 'auto']} hide /><Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} formatter={(val) => [(val * 100).toFixed(1) + "%", "Efficiency"]} /><Area type="monotone" dataKey="val" stroke="#10b981" fillOpacity={1} fill="url(#colorEff)" strokeWidth={2} /></AreaChart></ResponsiveContainer></div>
               </div>
             )}
-
-            <div className="bg-[#252630] rounded-2xl border border-slate-700/50 overflow-hidden shadow-lg">
-              <div className="p-4 border-b border-slate-700/50 flex justify-between items-center bg-[#1e293b]/50">
-                <h2 className="text-sm font-bold text-white uppercase tracking-widest">Historical Production</h2>
-                <span className="text-[10px] text-slate-500 font-mono italic">Enter actual kWh from your inverter</span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-[#1e293b]/50 border-b border-slate-700">
-                    <tr className="text-slate-400 uppercase text-[10px] font-bold">
-                      <th className="p-4">Date</th>
-                      {(config.strings || []).map(s => <th key={s.id} className="p-4 hidden md:table-cell">{s.name}</th>)}
-                      <th className="p-4">Model</th>
-                      <th className="p-4 text-indigo-400">Actual</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-slate-300 divide-y divide-slate-700/50">
-                    {dailyTotals.map((day, i) => (
-                      <tr key={i} className="hover:bg-[#2d2e3a] transition-colors">
-                        <td className="p-4 font-medium text-xs whitespace-nowrap">{day.date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</td>
-                        {(config.strings || []).map(s => <td key={s.id} className="p-4 text-slate-500 font-mono text-[10px] hidden md:table-cell">{(day.strings?.[s.id] || 0).toFixed(1)}</td>)}
-                        <td className="p-4 font-bold text-white text-xs">{day.yield.toFixed(2)} kWh</td>
-                        <td className="p-4">
-                          <div className="flex items-center gap-2">
-                             <input type="number" value={actuals[day.dayLabel] || ''} onChange={e => { saveActualToCloud(day.dayLabel, e.target.value); logAnalyticsEvent('actual_entry', { day: 'history' }); }} className="w-16 h-8 bg-[#1a1b23] border border-slate-600 rounded px-2 text-white text-xs" />
-                             <Zap className="w-3 h-3 text-slate-600" />
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <div className="bg-[#252630] rounded-2xl border border-slate-700/50 overflow-hidden shadow-lg"><div className="p-4 border-b border-slate-700/50 flex justify-between items-center bg-[#1e293b]/50"><h2 className="text-sm font-bold text-white uppercase tracking-widest">Historical Production</h2></div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-[#1e293b]/50 border-b border-slate-700"><tr className="text-slate-400 uppercase text-[10px] font-bold"><th className="p-4">Date</th>{(config.strings || []).map(s => <th key={s.id} className="p-4 hidden md:table-cell">{s.name}</th>)}<th className="p-4">Model</th><th className="p-4 text-indigo-400">Actual</th></tr></thead><tbody className="text-slate-300 divide-y divide-slate-700/50">{dailyTotals.map((day, i) => (<tr key={i} className="hover:bg-[#2d2e3a] transition-colors"><td className="p-4 font-medium text-xs whitespace-nowrap">{day.date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</td>{(config.strings || []).map(s => <td key={s.id} className="p-4 text-slate-500 font-mono text-[10px] hidden md:table-cell">{(day.strings?.[s.id] || 0).toFixed(1)}</td>)}<td className="p-4 font-bold text-white text-xs">{day.yield.toFixed(2)} kWh</td><td className="p-4"><div className="flex items-center gap-2"><input type="number" value={actuals[day.dayLabel] || ''} onChange={e => { saveActualToCloud(day.dayLabel, e.target.value); logAnalyticsEvent('actual_entry', { day: 'history' }); }} className="w-16 h-8 bg-[#1a1b23] border border-slate-600 rounded px-2 text-white text-xs" /><Zap className="w-3 h-3 text-slate-600" /></div></td></tr>))}</tbody></table></div></div>
           </div>
         )}
 
-        {/* MOBILE BOTTOM NAV */}
         <div className="fixed bottom-0 left-0 right-0 h-16 bg-[#1a1b23]/95 backdrop-blur-md border-t border-slate-800 flex md:hidden items-center justify-around px-6 z-50 pb-safe">
            <button onClick={() => setActiveTab('today')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'today' ? 'text-indigo-400' : 'text-slate-600'}`}><LayoutDashboard className="w-5 h-5" /><span className="text-[9px] font-bold uppercase tracking-tighter">Today</span></button>
            <button onClick={() => setActiveTab('forecast')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'forecast' ? 'text-indigo-400' : 'text-slate-600'}`}><TrendingUp className="w-5 h-5" /><span className="text-[9px] font-bold uppercase tracking-tighter">Forecast</span></button>
