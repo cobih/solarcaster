@@ -388,7 +388,12 @@ export default function App() {
             </div>
           ) : (
             <div className="space-y-6 animate-in slide-in-from-right-4">
-              <div className="flex justify-between items-center"><h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2"><Calculator className="w-4 h-4 text-amber-400" /> Define Strings</h3><button onClick={addString} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black">+ Add String</button></div>
+              <div className="flex justify-between items-center bg-[#1a1b23] p-3 rounded-2xl border border-slate-800">
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2"><Calculator className="w-4 h-4 text-amber-400" /> Define Strings</h3>
+                <button onClick={addString} className="px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all active:scale-95 shadow-sm">
+                  <Plus className="w-3.5 h-3.5" /> Add String
+                </button>
+              </div>
               <div className="max-h-[300px] overflow-y-auto space-y-3 pr-2 custom-scrollbar">{config.strings.map(s => (<div key={s.id} className="p-4 bg-[#1a1b23] rounded-2xl border border-slate-700 relative animate-in slide-in-from-bottom-2"><button onClick={() => removeString(s.id)} className="absolute top-3 right-3 text-slate-600 hover:text-red-400"><Trash2 className="w-4 h-4" /></button><div className="grid grid-cols-2 gap-4"><div className="col-span-2"><label className="block text-[9px] font-black text-slate-500 uppercase mb-1">String Name</label><input type="text" value={s.name} onChange={e => updateString(s.id, 'name', e.target.value)} className="w-full bg-transparent border-b border-slate-800 focus:border-indigo-500 outline-none text-white font-bold" /></div><div><label className="text-[9px] font-black text-slate-500 uppercase">Wattage</label><input type="number" value={s.wattage || 465} onChange={e => updateString(s.id, 'wattage', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg p-2 text-white" /></div><div><label className="text-[9px] font-black text-slate-500 uppercase">Pitch</label><input type="number" value={s.tilt} onChange={e => updateString(s.id, 'tilt', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg p-2 text-white" /></div><div className="col-span-2"><label className="text-[9px] font-black text-slate-500 uppercase">Azimuth (°)</label><input type="number" value={s.azimuth} onChange={e => updateString(s.id, 'azimuth', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg p-2 text-white" /></div></div></div>))}</div>
               {config.strings.length > 0 && (<div className="space-y-4"><div className="flex justify-between items-center text-xs text-slate-400 px-2"><span>Total System Capacity:</span><strong className="text-white text-lg font-black">{totalCapacity.toFixed(2)} <span className="text-xs font-normal text-slate-500 uppercase">kWp</span></strong></div><button onClick={() => saveConfigToCloud({ ...config, arraysSet: true })} className="w-full py-5 bg-emerald-600 text-white font-black rounded-2xl shadow-xl transition-all active:scale-95 uppercase tracking-widest">FINISH CALIBRATION</button><button onClick={() => setOnboardingStep(1)} className="w-full py-2 text-[10px] text-slate-600 font-bold uppercase hover:text-slate-400 transition-colors">Back</button></div>)}
             </div>
@@ -435,7 +440,18 @@ export default function App() {
               {locationMode === 'manual' && (<div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-left-2"><div><label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Latitude</label><input type="number" value={manualCoords.lat} onChange={e => setManualCoords({...manualCoords, lat: parseFloat(e.target.value)})} className="w-full px-3 py-2 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white font-mono outline-none focus:border-indigo-500" /></div><div><label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Longitude</label><input type="number" value={manualCoords.long} onChange={e => setManualCoords({...manualCoords, long: parseFloat(e.target.value)})} className="w-full px-3 py-2 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white font-mono outline-none focus:border-indigo-500" /></div><button onClick={() => selectLocation({ latitude: manualCoords.lat, longitude: manualCoords.long, name: "Manual", country: "User Set" })} className="col-span-2 py-2 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 text-[10px] font-bold rounded-lg border border-indigo-500/30 transition-all uppercase tracking-widest">APPLY COORDINATES</button></div>)}
               <div className="flex items-center gap-4 text-[10px] text-slate-400 font-mono bg-[#1a1b23] p-2 rounded-lg border border-slate-800/50"><div><span className="text-slate-600 uppercase">Lat:</span> <span className="text-white">{config.lat?.toFixed(4)}</span></div><div><span className="text-slate-600 uppercase">Lon:</span> <span className="text-white">{config.long?.toFixed(4)}</span></div>{config.locationName && <div className="ml-auto text-indigo-400 italic truncate max-w-[150px]">{config.locationName}</div>}</div>
             </div>
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-700 pb-4 gap-4"><h3 className="font-semibold text-white text-sm flex items-center gap-2"><Calculator className="w-4 h-4 text-amber-400" /> String Configuration</h3><div className="flex items-center gap-4 w-full md:w-auto"><div className="flex flex-1 items-center gap-3 bg-[#1a1b23] p-2 rounded-xl border border-slate-800"><label className="text-[9px] font-black text-slate-500 uppercase">Efficiency</label><input type="range" min="10" max="100" value={config.eff * 100} onChange={e => saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 })} className="flex-1 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500" /><div className="flex items-center gap-1 min-w-[45px]"><input type="number" value={Math.round(config.eff * 100)} onChange={e => saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 })} className="w-8 bg-transparent text-indigo-400 text-xs font-bold font-mono outline-none" /><span className="text-[10px] text-slate-600">%</span></div></div><button onClick={addString} className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/20"><Plus className="w-4 h-4" /> Add String</button></div></div>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-800 pb-4 gap-4">
+              <h3 className="font-semibold text-white text-sm flex items-center gap-2"><Calculator className="w-4 h-4 text-amber-400" /> String Configuration</h3>
+              <div className="flex items-center gap-4 w-full md:w-auto">
+                <div className="flex flex-1 items-center gap-3 bg-[#1a1b23] p-2 rounded-xl border border-slate-800">
+                   <label className="text-[9px] font-black text-slate-500 uppercase">Efficiency</label>
+                   <input type="range" min="10" max="100" value={config.eff * 100} onChange={e => saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 })} className="flex-1 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500" /><div className="flex items-center gap-1 min-w-[45px]"><input type="number" value={Math.round(config.eff * 100)} onChange={e => saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 })} className="w-8 bg-transparent text-indigo-400 text-xs font-bold font-mono outline-none" /><span className="text-[10px] text-slate-600">%</span></div>
+                </div>
+                <button onClick={addString} className="px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all active:scale-95 shadow-sm h-10 md:h-9 whitespace-nowrap">
+                  <Plus className="w-3.5 h-3.5" /> Add String
+                </button>
+              </div>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{(config.strings || []).map(s => (<div key={s.id} className="p-4 bg-[#1a1b23] rounded-2xl border border-slate-700 relative group animate-in slide-in-from-bottom-2"><div className="flex justify-between items-center mb-3"><input type="text" value={s.name} onChange={e => updateString(s.id, 'name', e.target.value)} className="bg-transparent border-b border-slate-800 focus:border-indigo-500 outline-none text-white font-bold text-sm py-1" /><button onClick={() => removeString(s.id)} className="p-2 bg-red-900/10 hover:bg-red-900/30 text-red-500 rounded-lg flex items-center gap-1 transition-colors border border-red-500/10"><Trash2 className="w-3 h-3" /><span className="text-[8px] font-black uppercase">Remove</span></button></div><div className="grid grid-cols-2 gap-3"><div><label className="text-[9px] font-bold text-slate-500 uppercase mb-1">Panels</label><input type="number" value={s.count} onChange={e => updateString(s.id, 'count', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white" /></div><div><label className="text-[9px] font-bold text-slate-500 uppercase mb-1">Wattage</label><input type="number" value={s.wattage || 465} onChange={e => updateString(s.id, 'wattage', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white" /></div><div><label className="text-[9px] font-bold text-slate-500 uppercase mb-1">Azimuth</label><input type="number" value={s.azimuth} onChange={e => updateString(s.id, 'azimuth', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white" /></div><div><label className="text-[9px] font-bold text-slate-500 uppercase mb-1">Pitch / Tilt</label><input type="number" value={s.tilt} onChange={e => updateString(s.id, 'tilt', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white" /></div></div></div>))}</div>
             <div className="bg-[#1a1b23] p-5 rounded-2xl border border-slate-800 space-y-6">
               <h3 className="font-semibold text-white text-sm flex items-center gap-2 border-b border-slate-800 pb-2"><Zap className="w-4 h-4 text-emerald-400" /> Financials & Storage</h3>
@@ -649,7 +665,31 @@ export default function App() {
             </div>
 
             <div className="bg-[#252630] p-4 md:p-6 rounded-2xl border border-slate-700/50 shadow-lg">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6"><h2 className="text-lg font-semibold text-white flex items-center gap-2"><Activity className="w-5 h-5 text-indigo-400" /> Hourly Profile</h2><div className="flex flex-wrap gap-2">{['clouds', 'total', 'energy', 'strings', 'uncertainty'].map(k => (<button key={k} onClick={() => toggleSeries(k)} className={`px-2 py-1 rounded text-[9px] font-black uppercase border transition-all shadow-sm ${visibleSeries[k] ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-transparent border-slate-800 text-slate-600'}`}>{k}</button>))}</div></div>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Activity className="w-5 h-5 text-indigo-400" /> Hourly Profile</h2>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { key: 'clouds', label: 'Clouds', color: '#475569' },
+                    { key: 'total', label: 'Total', color: '#fde047' },
+                    { key: 'energy', label: 'Energy', color: '#818cf8' },
+                    { key: 'strings', label: 'Strings', color: '#f59e0b' },
+                    { key: 'uncertainty', label: 'Uncertainty', color: '#6366f1' }
+                  ].map(btn => (
+                    <button 
+                      key={btn.key} 
+                      onClick={() => toggleSeries(btn.key)} 
+                      className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase border transition-all flex items-center gap-2 ${
+                        visibleSeries[btn.key] 
+                        ? 'bg-slate-800 border-slate-600 text-white shadow-inner' 
+                        : 'bg-transparent border-slate-800 text-slate-600'
+                      }`}
+                    >
+                      <div className={`w-1.5 h-1.5 rounded-full transition-all ${visibleSeries[btn.key] ? 'scale-100' : 'scale-50 opacity-40'}`} style={{ backgroundColor: btn.color }}></div>
+                      {btn.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="h-[250px] w-full"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={selectedDayData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" /><XAxis dataKey="timeLabel" interval={3} stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} /><YAxis stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} /><YAxis yAxisId="right" orientation="right" stroke="#818cf8" fontSize={10} axisLine={false} tickLine={false} unit="kWh" /><Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} content={({ active, payload, label }) => { if (active && payload && payload.length) return (<div className="bg-[#1e293b] border border-slate-700 p-3 rounded-lg shadow-xl text-[10px] space-y-1"><p className="font-bold text-slate-400 mb-1">{label}</p>{payload.map((e, idx) => (<div key={idx} className="flex justify-between gap-4"><span style={{ color: e.color }} className="font-bold">{e.name}:</span><span className="text-white font-mono">{e.value} {e.dataKey === 'cumulativeYield' ? 'kWh' : (e.dataKey === 'cloudCover' ? '%' : 'kW')}</span></div>))}</div>); return null; }} />{visibleSeries.uncertainty && <Area type="monotone" dataKey={['p10', 'p90']} stroke="none" fill="#fde047" fillOpacity={0.1} name="Uncertainty" />}{visibleSeries.clouds && <Area yAxisId="right" type="monotone" dataKey="cloudCover" name="Cloud %" stroke="none" fill="#475569" fillOpacity={0.1} />}{visibleSeries.total && <Area type="monotone" dataKey="total" name="Total Power" stroke="#fde047" fill="#fde047" fillOpacity={0.1} strokeWidth={2} />}{visibleSeries.strings && (config.strings || []).map((s, idx) => <Line key={s.id} type="monotone" dataKey={`stringPowers.${s.id}`} name={s.name} stroke={STRING_COLORS[idx % STRING_COLORS.length]} strokeWidth={1} dot={false} strokeDasharray="5 5" />)}{visibleSeries.energy && <Line yAxisId="right" type="monotone" dataKey="cumulativeYield" name="Energy" stroke="#818cf8" strokeWidth={3} dot={false} />}{currentHourTick && <ReferenceLine x={currentHourTick} stroke="#818cf8" strokeDasharray="4 4" />}</ComposedChart></ResponsiveContainer></div>
             </div>
 
@@ -700,11 +740,17 @@ export default function App() {
               {showForecastChart && (
                 <div className="p-6 pt-0 animate-in zoom-in-95 duration-200">
                   <div className="flex flex-wrap gap-2 mb-4">
-                    {['uncertainty'].map(k => (
-                      <button key={k} onClick={() => toggleSeries(k)} className={`px-2 py-1 rounded text-[9px] font-black uppercase border transition-all shadow-sm ${visibleSeries[k] ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-transparent border-slate-800 text-slate-600'}`}>
-                        {visibleSeries[k] ? "Hide Uncertainty" : "Show Uncertainty"}
-                      </button>
-                    ))}
+                    <button 
+                      onClick={() => toggleSeries('uncertainty')} 
+                      className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase border transition-all flex items-center gap-2 ${
+                        visibleSeries.uncertainty 
+                        ? 'bg-slate-800 border-slate-600 text-white shadow-inner' 
+                        : 'bg-transparent border-slate-800 text-slate-600'
+                      }`}
+                    >
+                      <div className={`w-1.5 h-1.5 rounded-full transition-all ${visibleSeries.uncertainty ? 'scale-100' : 'scale-50 opacity-40'}`} style={{ backgroundColor: '#6366f1' }}></div>
+                      {visibleSeries.uncertainty ? "Hide Uncertainty" : "Show Uncertainty"}
+                    </button>
                   </div>
                   <div className="h-[220px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
