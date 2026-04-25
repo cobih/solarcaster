@@ -31,6 +31,7 @@ export const useFirestoreSync = (user, appId) => {
     onMicrogenScheme: false,
     exportRate: 0.21,
     importRate: 0.40,
+    currency: "€",
   });
 
   const [actuals, setActuals] = useState(isDemo ? {
@@ -62,6 +63,7 @@ export const useFirestoreSync = (user, appId) => {
         if (data.onMicrogenScheme === undefined) migrated.onMicrogenScheme = false;
         if (data.exportRate === undefined) migrated.exportRate = 0.21;
         if (data.importRate === undefined) migrated.importRate = 0.40;
+        if (data.currency === undefined) migrated.currency = "€";
         if (data.strings && data.strings.length > 0) {
            migrated.arraysSet = true;
            migrated.strings = data.strings.map(s => ({ ...s, wattage: s.wattage || 465 }));

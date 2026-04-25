@@ -45,6 +45,7 @@ export const sanitizeConfig = (config) => {
     onMicrogenScheme: !!config.onMicrogenScheme,
     exportRate: parseFloat(config.exportRate) || 0,
     importRate: parseFloat(config.importRate) || 0,
+    currency: sanitizeString(config.currency || "€").slice(0, 3),
     schemaVersion: 2, // Force current schema
     strings: (config.strings || []).map(s => ({
       ...s,

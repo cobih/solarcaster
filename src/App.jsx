@@ -193,6 +193,15 @@ export default function App() {
     }
   }, [dailyTotals, selectedDayLabel]);
 
+  const getCurrencyForCountry = (country) => {
+    const map = {
+      'Ireland': '€', 'United Kingdom': '£', 'United States': '$', 'USA': '$',
+      'Germany': '€', 'France': '€', 'Spain': '€', 'Italy': '€', 'Australia': '$',
+      'Canada': '$', 'New Zealand': '$'
+    };
+    return map[country] || '€';
+  };
+
   const searchAddress = async (q) => {
     setAddressQuery(q);
     if (q.length < 3) { setSearchResults([]); return; }
@@ -222,7 +231,15 @@ export default function App() {
       try {
         const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`);
         const d = await res.json();
-        saveConfigToCloud({ ...config, lat: pos.coords.latitude, long: pos.coords.longitude, locationName: sanitizeString(`${d.address.city || d.address.town}, ${d.address.country}`), locationSet: true });
+        const country = d.address.country || "Ireland";
+        saveConfigToCloud({ 
+          ...config, 
+          lat: pos.coords.latitude, 
+          long: pos.coords.longitude, 
+          locationName: sanitizeString(`${d.address.city || d.address.town}, ${country}`), 
+          locationSet: true,
+          currency: getCurrencyForCountry(country)
+        });
       } catch {
         saveConfigToCloud({ ...config, lat: pos.coords.latitude, long: pos.coords.longitude, locationName: "GPS Detected", locationSet: true });
       } finally { setSearchLoading(false); }
@@ -230,7 +247,14 @@ export default function App() {
   };
 
   const selectLocation = (res) => {
-    saveConfigToCloud({ ...config, lat: res.latitude, long: res.longitude, locationName: res.name + (res.admin1 ? ', ' + res.admin1 : ''), locationSet: true });
+    saveConfigToCloud({ 
+      ...config, 
+      lat: res.latitude, 
+      long: res.longitude, 
+      locationName: res.name + (res.admin1 ? ', ' + res.admin1 : ''), 
+      locationSet: true,
+      currency: getCurrencyForCountry(res.country)
+    });
     setSearchResults([]); setAddressQuery("");
   };
 
@@ -413,10 +437,25 @@ export default function App() {
             </div>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-700 pb-4 gap-4"><h3 className="font-semibold text-white text-sm flex items-center gap-2"><Calculator className="w-4 h-4 text-amber-400" /> String Configuration</h3><div className="flex items-center gap-4 w-full md:w-auto"><div className="flex flex-1 items-center gap-3 bg-[#1a1b23] p-2 rounded-xl border border-slate-800"><label className="text-[9px] font-black text-slate-500 uppercase">Efficiency</label><input type="range" min="10" max="100" value={config.eff * 100} onChange={e => saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 })} className="flex-1 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500" /><div className="flex items-center gap-1 min-w-[45px]"><input type="number" value={Math.round(config.eff * 100)} onChange={e => saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 })} className="w-8 bg-transparent text-indigo-400 text-xs font-bold font-mono outline-none" /><span className="text-[10px] text-slate-600">%</span></div></div><button onClick={addString} className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/20"><Plus className="w-4 h-4" /> Add String</button></div></div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{(config.strings || []).map(s => (<div key={s.id} className="p-4 bg-[#1a1b23] rounded-2xl border border-slate-700 relative group animate-in slide-in-from-bottom-2"><div className="flex justify-between items-center mb-3"><input type="text" value={s.name} onChange={e => updateString(s.id, 'name', e.target.value)} className="bg-transparent border-b border-slate-800 focus:border-indigo-500 outline-none text-white font-bold text-sm py-1" /><button onClick={() => removeString(s.id)} className="p-2 bg-red-900/10 hover:bg-red-900/30 text-red-500 rounded-lg flex items-center gap-1 transition-colors border border-red-500/10"><Trash2 className="w-3 h-3" /><span className="text-[8px] font-black uppercase">Remove</span></button></div><div className="grid grid-cols-2 gap-3"><div><label className="text-[9px] font-bold text-slate-500 uppercase mb-1">Panels</label><input type="number" value={s.count} onChange={e => updateString(s.id, 'count', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white" /></div><div><label className="text-[9px] font-bold text-slate-500 uppercase mb-1">Wattage</label><input type="number" value={s.wattage || 465} onChange={e => updateString(s.id, 'wattage', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white" /></div><div><label className="text-[9px] font-bold text-slate-500 uppercase mb-1">Azimuth</label><input type="number" value={s.azimuth} onChange={e => updateString(s.id, 'azimuth', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white" /></div><div><label className="text-[9px] font-bold text-slate-500 uppercase mb-1">Pitch / Tilt</label><input type="number" value={s.tilt} onChange={e => updateString(s.id, 'tilt', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white" /></div></div></div>))}</div>
-            {/* FINANCIALS & STORAGE */}
             <div className="bg-[#1a1b23] p-5 rounded-2xl border border-slate-800 space-y-6">
               <h3 className="font-semibold text-white text-sm flex items-center gap-2 border-b border-slate-800 pb-2"><Zap className="w-4 h-4 text-emerald-400" /> Financials & Storage</h3>
               
+              <div className="space-y-4">
+                <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-widest">Currency Symbol</label>
+                <div className="flex gap-2">
+                   {['€', '£', '$'].map(sym => (
+                     <button key={sym} onClick={() => saveConfigToCloud({ ...config, currency: sym })} className={`flex-1 py-2 rounded-lg text-sm font-bold border transition-all ${config.currency === sym ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-[#252630] border-slate-700 text-slate-400'}`}>{sym}</button>
+                   ))}
+                   <input 
+                     type="text" 
+                     value={config.currency || ''} 
+                     onChange={e => saveConfigToCloud({ ...config, currency: e.target.value.slice(0, 3) })} 
+                     placeholder="Custom"
+                     className="flex-1 bg-[#252630] border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-bold text-center outline-none focus:border-indigo-500" 
+                   />
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">Daily Load (kWh) <Info className="w-2.5 h-2.5" title="Your average daily electricity usage" /></label>
@@ -449,8 +488,8 @@ export default function App() {
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
-                   <div><label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Import Rate (€)</label><input type="number" step="0.01" value={config.importRate} onChange={e => saveConfigToCloud({ ...config, importRate: Number(e.target.value) })} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" /></div>
-                   <div><label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Export Rate (€)</label><input type="number" step="0.01" value={config.exportRate} onChange={e => saveConfigToCloud({ ...config, exportRate: Number(e.target.value) })} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" /></div>
+                   <div><label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Import Rate ({config.currency})</label><input type="number" step="0.01" value={config.importRate} onChange={e => saveConfigToCloud({ ...config, importRate: Number(e.target.value) })} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" /></div>
+                   <div><label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Export Rate ({config.currency})</label><input type="number" step="0.01" value={config.exportRate} onChange={e => saveConfigToCloud({ ...config, exportRate: Number(e.target.value) })} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" /></div>
                 </div>
               </div>
             </div>
@@ -548,11 +587,11 @@ export default function App() {
                      <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 text-emerald-400"><TrendingUp className="w-6 h-6" /></div>
                      <div>
                         <h3 className="text-sm font-black text-white uppercase tracking-widest">Estimated Economics</h3>
-                        <p className="text-[10px] text-slate-500 font-medium">Tomorrow's solar could save you an estimated <strong className="text-emerald-400">€{tomorrowSavings.toFixed(2)}</strong></p>
+                        <p className="text-[10px] text-slate-500 font-medium">Tomorrow's solar could save you an estimated <strong className="text-emerald-400">{config.currency}{tomorrowSavings.toFixed(2)}</strong></p>
                      </div>
                   </div>
                   <div className="flex items-center gap-4">
-                     <div className="text-right hidden sm:block"><div className="text-[9px] text-slate-500 uppercase font-black">Estimated Savings Today</div><div className="text-xl font-black text-white">€{todaySavings.toFixed(2)}</div></div>
+                     <div className="text-right hidden sm:block"><div className="text-[9px] text-slate-500 uppercase font-black">Estimated Savings Today</div><div className="text-xl font-black text-white">{config.currency}{todaySavings.toFixed(2)}</div></div>
                      {showEconomics ? <ChevronUp className="w-5 h-5 text-slate-600" /> : <ChevronDown className="w-5 h-5 text-slate-600" />}
                   </div>
                </button>
@@ -565,7 +604,7 @@ export default function App() {
                               <div className="flex justify-between items-start mb-2"><span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Self-Consumed</span><Zap className="w-3 h-3 text-emerald-400" /></div>
                               <div className="text-xl font-bold text-white">{todayForecast.economics?.selfConsumed.toFixed(1)} <span className="text-xs text-slate-500 font-normal uppercase">kWh</span></div>
                            </div>
-                           <div className="mt-4 pt-3 border-t border-slate-800/50 text-[10px] text-emerald-400 font-bold">Saved ~€{(todayForecast.economics?.selfConsumed * config.importRate).toFixed(2)} vs grid import</div>
+                           <div className="mt-4 pt-3 border-t border-slate-800/50 text-[10px] text-emerald-400 font-bold">Saved ~{config.currency}{(todayForecast.economics?.selfConsumed * config.importRate).toFixed(2)} vs grid import</div>
                         </div>
 
                         <div className="p-4 bg-[#1a1b23] rounded-xl border border-slate-800 flex flex-col justify-between">
@@ -575,11 +614,11 @@ export default function App() {
                            </div>
                            <div className="mt-4 pt-3 border-t border-slate-800/50">
                               {config.onMicrogenScheme ? (
-                                <span className="text-[10px] text-indigo-400 font-bold">Est. €{(todayForecast.economics?.exported * config.exportRate).toFixed(2)} earnings today</span>
+                                <span className="text-[10px] text-indigo-400 font-bold">Est. {config.currency}{(todayForecast.economics?.exported * config.exportRate).toFixed(2)} earnings today</span>
                               ) : (
                                 <div className="space-y-1">
                                   <div className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">Export Earnings Disabled</div>
-                                  <p className="text-[10px] text-slate-600 leading-tight">Enable export in settings to see potential value: ~€{(todayForecast.economics?.exported * config.exportRate).toFixed(2)}</p>
+                                  <p className="text-[10px] text-slate-600 leading-tight">Enable export in settings to see potential value: ~{config.currency}{(todayForecast.economics?.exported * config.exportRate).toFixed(2)}</p>
                                 </div>
                               )}
                            </div>
@@ -590,7 +629,7 @@ export default function App() {
                               <div className="flex justify-between items-start mb-2"><span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Grid Import Needed</span><CloudRain className="w-3 h-3 text-red-400" /></div>
                               <div className="text-xl font-bold text-white">{todayForecast.economics?.imported.toFixed(1)} <span className="text-xs text-slate-500 font-normal uppercase">kWh</span></div>
                            </div>
-                           <div className="mt-4 pt-3 border-t border-slate-800/50 text-[10px] text-slate-500 font-medium">Estimated cost: €{(todayForecast.economics?.imported * config.importRate).toFixed(2)}</div>
+                           <div className="mt-4 pt-3 border-t border-slate-800/50 text-[10px] text-slate-500 font-medium">Estimated cost: {config.currency}{(todayForecast.economics?.imported * config.importRate).toFixed(2)}</div>
                         </div>
                      </div>
 
