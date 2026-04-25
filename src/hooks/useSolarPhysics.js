@@ -162,5 +162,28 @@ export const useSolarPhysics = (config, dbSyncing) => {
 
   const totalCapacity = (config.strings || []).reduce((acc, s) => acc + (s.count * (s.wattage || 465) / 1000), 0);
 
-  return { data, dailyTotals, nowLabel, loading, error, totalCapacity };
+  // --- CALCULATE VITALS ---
+  const now = new Date();
+  
+  const todayHourly = data.filter(d => d.dayLabel === now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }));
+  const currentHourData = todayHourly.find(d => {
+    const dHour = d.date.getHours();
+    return dHour === now.getHours();
+  });
+  const nextHourData = todayHourly.find(d => {
+    const dHour = d.date.getHours();
+    return dHour === now.getHours() + 1;
+  });
+
+  const remainingToday = todayHourly
+    .filter(d => d.date.getHours() >= now.getHours())
+    .reduce((acc, curr) => acc + curr.total, 0);
+
+  const vitals = {
+    thisHour: currentHourData?.total || 0,
+    nextHour: nextHourData?.total || 0,
+    remainingToday: remainingToday || 0,
+  };
+
+  return { data, dailyTotals, nowLabel, loading, error, totalCapacity, vitals };
 };

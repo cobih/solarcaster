@@ -29,7 +29,7 @@ export default function App() {
   } = useFirestoreSync(isDemo ? { uid: 'demo-user', email: 'demo@solarcaster.ai' } : user, appId);
   
   const { 
-    data, dailyTotals, nowLabel, loading, totalCapacity 
+    data, dailyTotals, nowLabel, loading, totalCapacity, vitals 
   } = useSolarPhysics(config, dbSyncing);
 
   const [showConfig, setShowConfig] = useState(false);
@@ -400,6 +400,38 @@ export default function App() {
             <div className="bg-[#252630] p-4 md:p-6 rounded-2xl border border-slate-700/50 shadow-lg">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6"><h2 className="text-lg font-semibold text-white flex items-center gap-2"><Activity className="w-5 h-5 text-indigo-400" /> Hourly Profile</h2><div className="flex flex-wrap gap-2">{['clouds', 'total', 'energy', 'strings'].map(k => (<button key={k} onClick={() => toggleSeries(k)} className={`px-2 py-1 rounded text-[9px] font-black uppercase border transition-all shadow-sm ${visibleSeries[k] ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-transparent border-slate-800 text-slate-600'}`}>{k}</button>))}</div></div>
               <div className="h-[250px] w-full"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={selectedDayData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" /><XAxis dataKey="timeLabel" interval={3} stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} /><YAxis stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} /><YAxis yAxisId="right" orientation="right" stroke="#818cf8" fontSize={10} axisLine={false} tickLine={false} unit="kWh" /><Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} content={({ active, payload, label }) => { if (active && payload && payload.length) return (<div className="bg-[#1e293b] border border-slate-700 p-3 rounded-lg shadow-xl text-[10px] space-y-1"><p className="font-bold text-slate-400 mb-1">{label}</p>{payload.map((e, idx) => (<div key={idx} className="flex justify-between gap-4"><span style={{ color: e.color }} className="font-bold">{e.name}:</span><span className="text-white font-mono">{e.value} {e.dataKey === 'cumulativeYield' ? 'kWh' : (e.dataKey === 'cloudCover' ? '%' : 'kW')}</span></div>))}</div>); return null; }} />{visibleSeries.clouds && <Area yAxisId="right" type="monotone" dataKey="cloudCover" name="Cloud %" stroke="none" fill="#475569" fillOpacity={0.1} />}{visibleSeries.total && <Area type="monotone" dataKey="total" name="Total Power" stroke="#fde047" fill="#fde047" fillOpacity={0.1} strokeWidth={2} />}{visibleSeries.strings && (config.strings || []).map((s, idx) => <Line key={s.id} type="monotone" dataKey={`stringPowers.${s.id}`} name={s.name} stroke={STRING_COLORS[idx % STRING_COLORS.length]} strokeWidth={1} dot={false} strokeDasharray="5 5" />)}{visibleSeries.energy && <Line yAxisId="right" type="monotone" dataKey="cumulativeYield" name="Energy" stroke="#818cf8" strokeWidth={3} dot={false} />}{currentHourTick && <ReferenceLine x={currentHourTick} stroke="#818cf8" strokeDasharray="4 4" />}</ComposedChart></ResponsiveContainer></div>
+            </div>
+
+            {/* SYSTEM VITALS CARD */}
+            <div className="bg-[#252630] rounded-2xl border border-slate-700/50 shadow-lg overflow-hidden">
+              <div className="grid grid-cols-1 md:grid-cols-2">
+                <div className="p-6 border-b md:border-b-0 md:border-r border-slate-800">
+                   <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-4 flex items-center gap-2"><Zap className="w-3 h-3 text-amber-400" /> Real-time Performance</h3>
+                   <div className="space-y-4">
+                     <div className="flex justify-between items-center">
+                       <span className="text-xs text-slate-400">Forecast This Hour</span>
+                       <span className="text-sm font-bold text-white">{(vitals.thisHour * 1000).toLocaleString()} <span className="text-[10px] text-slate-500 font-normal">Wh</span></span>
+                     </div>
+                     <div className="flex justify-between items-center">
+                       <span className="text-xs text-slate-400">Next Hour Forecast</span>
+                       <span className="text-sm font-bold text-white">{(vitals.nextHour * 1000).toLocaleString()} <span className="text-[10px] text-slate-500 font-normal">Wh</span></span>
+                     </div>
+                   </div>
+                </div>
+                <div className="p-6 bg-slate-900/20">
+                   <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-4 flex items-center gap-2"><Calendar className="w-3 h-3 text-indigo-400" /> Daily Outlook</h3>
+                   <div className="space-y-4">
+                     <div className="flex justify-between items-center">
+                       <span className="text-xs text-slate-400">Remaining Today Forecast</span>
+                       <span className="text-sm font-bold text-indigo-400">{vitals.remainingToday.toFixed(2)} <span className="text-[10px] text-slate-500 font-normal uppercase">kWh</span></span>
+                     </div>
+                     <div className="flex justify-between items-center">
+                       <span className="text-xs text-slate-400">Tomorrow Forecast</span>
+                       <span className="text-sm font-bold text-white">{tomorrowForecast.yield.toFixed(2)} <span className="text-[10px] text-slate-500 font-normal uppercase">kWh</span></span>
+                     </div>
+                   </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
