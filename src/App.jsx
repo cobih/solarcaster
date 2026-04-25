@@ -20,7 +20,7 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 const appId = "solar-forecaster-63320";
 
 export default function App() {
-  const { user, authLoading, login, logout, setAuthError } = useSolarAuth();
+  const { user, authLoading, login, logout } = useSolarAuth();
   const [isDemo, setIsDemo] = useState(false);
 
   const { 
@@ -29,7 +29,7 @@ export default function App() {
   } = useFirestoreSync(isDemo ? { uid: 'demo-user', email: 'demo@solarcaster.ai' } : user, appId);
   
   const { 
-    data, dailyTotals, nowLabel, loading, error, totalCapacity 
+    data, dailyTotals, nowLabel, loading, totalCapacity 
   } = useSolarPhysics(config, dbSyncing);
 
   const [showConfig, setShowConfig] = useState(false);
@@ -63,7 +63,7 @@ export default function App() {
     if (user && !isDemo) {
       logAnalyticsEvent('login', { method: 'google' });
     }
-  }, [user?.uid, isDemo]);
+  }, [user?.uid, isDemo, user]);
 
   useEffect(() => {
     if (config.apiEnabled && dailyTotals.length > 0 && !isDemo) {
@@ -95,7 +95,7 @@ export default function App() {
       await clearSensitiveData();
       await logout();
       window.location.reload();
-    } catch (e) { console.error(e); }
+    } catch (err) { console.error(err); }
   };
 
   const maxKw = data.length > 0 ? Math.max(...data.map(d => d.total)) : 0;
@@ -159,7 +159,7 @@ export default function App() {
         const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`);
         const d = await res.json();
         saveConfigToCloud({ ...config, lat: pos.coords.latitude, long: pos.coords.longitude, locationName: sanitizeString(`${d.address.city || d.address.town}, ${d.address.country}`), locationSet: true });
-      } catch (e) {
+      } catch {
         saveConfigToCloud({ ...config, lat: pos.coords.latitude, long: pos.coords.longitude, locationName: "GPS Detected", locationSet: true });
       } finally { setSearchLoading(false); }
     }, () => setSearchLoading(false));
@@ -178,9 +178,7 @@ export default function App() {
       const subject = encodeURIComponent(`Solarcaster Feedback`);
       window.location.href = `mailto:cobih.obih+solarcaster@gmail.com?subject=${subject}&body=${encodeURIComponent(feedbackText)}`;
       setFeedbackText(""); setShowFeedback(false);
-    } catch (err) { alert("Failed"); } finally { setIsSubmittingFeedback(false); }
-  };
-
+    } catch { alert("Failed"); } finally { setIsSubmittingFeedback(false); }  };
   const addString = () => {
     const s = { id: 's' + Date.now(), name: `String ${config.strings.length + 1}`, azimuth: 180, tilt: 35, count: 10, wattage: 465 };
     saveConfigToCloud({ ...config, strings: [...config.strings, s] });
