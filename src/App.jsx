@@ -638,7 +638,7 @@ export default function App() {
                         <div className="bg-indigo-500/10 border border-indigo-500/20 p-3 rounded-xl flex items-center gap-3">
                            <Zap className="w-4 h-4 text-indigo-400 shrink-0" />
                            <p className="text-[11px] font-bold text-slate-200 leading-tight">
-                              Best window today: <span className="text-indigo-300">{adviceText}</span> — good time for high-draw appliances.
+                              ⚡ Best window: <span className="text-indigo-300">{adviceText}</span> — good time for high-draw appliances.
                            </p>
                         </div>
                      )}
