@@ -115,7 +115,8 @@ export const useSolarPhysics = (config, dbSyncing) => {
 
           const itemMidnight = new Date(date.getFullYear(), date.getMonth(), date.getDate());
           const dayOffset = Math.round((itemMidnight - todayMidnight) / (1000 * 60 * 60 * 24));
-          const isoDate = itemMidnight.toISOString().split('T')[0];
+          // Robust Local ISO Key (YYYY-MM-DD)
+          const isoDate = `${itemMidnight.getFullYear()}-${String(itemMidnight.getMonth() + 1).padStart(2, '0')}-${String(itemMidnight.getDate()).padStart(2, '0')}`;
           
           if (!totalsByDay[dayLabel]) {
             totalsByDay[dayLabel] = { date: itemMidnight, dayLabel, isoDate, dayOffset, yield: 0, strings: {} };

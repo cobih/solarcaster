@@ -66,11 +66,11 @@ export const useFirestoreSync = (user, appId) => {
         // MIGRATION: Convert old "Day, Month Date" keys to "YYYY-MM-DD"
         // We look at the last 14 days and see if any old-style keys match
         const now = new Date();
-        for (let i = -7; i <= 7; i++) {
+        for (let i = -14; i <= 7; i++) {
           const d = new Date(now);
           d.setDate(d.getDate() + i);
           const oldKey = d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-          const newKey = d.toISOString().split('T')[0];
+          const newKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
           if (rawActuals[oldKey] !== undefined && !rawActuals[newKey]) {
             migratedActuals[newKey] = rawActuals[oldKey];
