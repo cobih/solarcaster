@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
-  ComposedChart, Line, Legend
+  ComposedChart, Line, Legend, Bar
 } from 'recharts';
 import {
   Sun, Calendar, Settings, AlertCircle, Info, Target, Calculator, Zap, Cloud,
