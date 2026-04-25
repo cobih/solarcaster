@@ -30,6 +30,8 @@ export const useFirestoreSync = (user, appId) => {
   const [actuals, setActuals] = useState(isDemo ? {
     [new Date().toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })]: 14.5
   } : {});
+  
+  const [snapshots, setSnapshots] = useState(isDemo ? {} : {});
 
   useEffect(() => {
     if (!user || isDemo) return;
@@ -66,33 +68,34 @@ export const useFirestoreSync = (user, appId) => {
         const rawActuals = docSnap.data();
         const migratedActuals = { ...rawActuals };
         let needsUpdate = false;
-
-        // MIGRATION: Convert old "Day, Month Date" keys to "YYYY-MM-DD"
-        // We look at the last 14 days and see if any old-style keys match
         const now = new Date();
         for (let i = -14; i <= 7; i++) {
           const d = new Date(now);
           d.setDate(d.getDate() + i);
           const oldKey = d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
           const newKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
           if (rawActuals[oldKey] !== undefined && !rawActuals[newKey]) {
             migratedActuals[newKey] = rawActuals[oldKey];
             delete migratedActuals[oldKey];
             needsUpdate = true;
           }
         }
-
-        if (needsUpdate) {
-           setDoc(actualsRef, migratedActuals); // Transparently upgrade the DB
-        }
+        if (needsUpdate) { setDoc(actualsRef, migratedActuals); }
         setActuals(migratedActuals);
       }
     }, (err) => console.error("Actuals Sync Error:", err));
 
+    const snapshotsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'snapshots');
+    const unsubSnapshots = onSnapshot(snapshotsRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setSnapshots(docSnap.data());
+      }
+    }, (err) => console.error("Snapshots Sync Error:", err));
+
     return () => { 
       unsubConfig(); 
       unsubActuals();
+      unsubSnapshots();
       clearTimeout(timeoutId);
       clearTimeout(statusTimer);
     };
@@ -109,9 +112,7 @@ export const useFirestoreSync = (user, appId) => {
       cleanConfig.effHistory = [historyEntry, ...(config.effHistory || [])].slice(0, 50);
     }
     setConfig(cleanConfig);
-    
     if (!user || isDemo) return;
-    
     setDbStatus("Saving Config...");
     try {
       const configRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'config');
@@ -127,9 +128,7 @@ export const useFirestoreSync = (user, appId) => {
   const saveActualToCloud = async (dayLabel, value) => {
     const newVal = { ...actuals, [dayLabel]: value };
     setActuals(newVal);
-    
     if (!user || isDemo) return;
-    
     setDbStatus(`Saving Actual: ${dayLabel}`);
     try {
       const actualsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'actuals');
@@ -139,6 +138,18 @@ export const useFirestoreSync = (user, appId) => {
     } catch (err) {
       console.error("Failed to save actuals:", err);
       setDbStatus("Save Error");
+    }
+  };
+
+  const saveSnapshotToCloud = async (isoDate, modelledYield) => {
+    const newVal = { ...snapshots, [isoDate]: modelledYield };
+    setSnapshots(newVal);
+    if (!user || isDemo) return;
+    try {
+      const snapshotsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'snapshots');
+      await setDoc(snapshotsRef, { [isoDate]: modelledYield }, { merge: true });
+    } catch (err) {
+      console.error("Failed to save snapshot:", err);
     }
   };
 
@@ -164,11 +175,13 @@ export const useFirestoreSync = (user, appId) => {
   return { 
     config, 
     actuals, 
+    snapshots,
     dbSyncing, 
     dbStatus, 
     lastSynced, 
     saveConfigToCloud, 
     saveActualToCloud,
+    saveSnapshotToCloud,
     publishForecast
   };
 };
