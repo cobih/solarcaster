@@ -32,6 +32,7 @@ export const useFirestoreSync = (user, appId) => {
     exportRate: 0.21,
     importRate: 0.40,
     currency: "€",
+    showEconomics: false, // UI preference
   });
 
   const [actuals, setActuals] = useState(isDemo ? {

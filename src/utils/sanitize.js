@@ -46,6 +46,7 @@ export const sanitizeConfig = (config) => {
     exportRate: parseFloat(config.exportRate) || 0,
     importRate: parseFloat(config.importRate) || 0,
     currency: sanitizeString(config.currency || "€").slice(0, 3),
+    showEconomics: !!config.showEconomics,
     schemaVersion: 2, // Force current schema
     strings: (config.strings || []).map(s => ({
       ...s,

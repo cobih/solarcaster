@@ -47,7 +47,6 @@ export default function App() {
   const [feedbackText, setFeedbackText] = useState("");
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
   const [showForecastChart, setShowForecastChart] = useState(false);
-  const [showEconomics, setShowEconomics] = useState(false);
   const [selectedDayLabel, setSelectedDayLabel] = useState("");
   const [expandedForecastDay, setExpandedForecastDay] = useState(null);
   const [activeTab, setActiveTab] = useState("today");
@@ -611,68 +610,125 @@ export default function App() {
             </div>
 
             {/* ESTIMATED ECONOMICS CARD */}
-            <div className="bg-[#252630] rounded-2xl border border-slate-700/50 shadow-lg overflow-hidden">
-               <button onClick={() => setShowEconomics(!showEconomics)} className="w-full p-5 flex items-center justify-between hover:bg-[#2d2e3a] transition-colors">
-                  <div className="flex items-center gap-4 text-left">
-                     <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 text-emerald-400"><TrendingUp className="w-6 h-6" /></div>
+            <div className="bg-[#252630] rounded-3xl border border-slate-700/50 shadow-xl overflow-hidden group">
+               <button 
+                 onClick={() => saveConfigToCloud({ ...config, showEconomics: !config.showEconomics })} 
+                 className="w-full p-6 flex items-center justify-between hover:bg-[#2d2e3a] transition-all duration-300"
+               >
+                  <div className="flex items-center gap-5 text-left">
+                     <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 text-emerald-400 group-hover:scale-110 transition-transform">
+                        <TrendingUp className="w-7 h-7" />
+                     </div>
                      <div>
-                        <h3 className="text-sm font-black text-white uppercase tracking-widest">Estimated Economics</h3>
-                        <p className="text-[10px] text-slate-500 font-medium">Tomorrow's solar could save you an estimated <strong className="text-emerald-400">{config.currency}{tomorrowSavings.toFixed(2)}</strong></p>
+                        <h3 className="text-sm font-black text-white uppercase tracking-[0.15em] mb-1">Estimated Economics</h3>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                          Tomorrow's outlook: <strong className="text-emerald-400 font-black">{config.currency}{tomorrowSavings.toFixed(2)} value</strong>
+                        </p>
                      </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                     <div className="text-right hidden sm:block"><div className="text-[9px] text-slate-500 uppercase font-black">Estimated Savings Today</div><div className="text-xl font-black text-white">{config.currency}{todaySavings.toFixed(2)}</div></div>
-                     {showEconomics ? <ChevronUp className="w-5 h-5 text-slate-600" /> : <ChevronDown className="w-5 h-5 text-slate-600" />}
+                  <div className="flex items-center gap-6">
+                     <div className="text-right hidden sm:block">
+                        <div className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Total Daily Value</div>
+                        <div className="text-3xl font-black text-white tracking-tighter">{config.currency}{todaySavings.toFixed(2)}</div>
+                     </div>
+                     <div className={`p-2 rounded-full transition-colors ${config.showEconomics ? 'bg-slate-700 text-white' : 'bg-slate-800 text-slate-500'}`}>
+                        {config.showEconomics ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                     </div>
                   </div>
                </button>
                
-               {showEconomics && (
-                  <div className="px-5 pb-6 space-y-6 animate-in slide-in-from-top-2 duration-300">
-                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="p-4 bg-[#1a1b23] rounded-xl border border-slate-800 flex flex-col justify-between">
-                           <div>
-                              <div className="flex justify-between items-start mb-2"><span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Self-Consumed</span><Zap className="w-3 h-3 text-emerald-400" /></div>
-                              <div className="text-xl font-bold text-white">{todayForecast.economics?.selfConsumed.toFixed(1)} <span className="text-xs text-slate-500 font-normal uppercase">kWh</span></div>
+               {config.showEconomics && (
+                  <div className="px-6 pb-8 space-y-8 animate-in slide-in-from-top-4 duration-500">
+                     
+                     {/* ENERGY PATH BAR */}
+                     <div className="space-y-3">
+                        <div className="flex justify-between items-end px-1">
+                           <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Energy Destination</span>
+                           <span className="text-[10px] font-bold text-slate-400">Total Generation: {todayForecast.yield.toFixed(1)} kWh</span>
+                        </div>
+                        <div className="h-4 w-full bg-slate-800 rounded-full overflow-hidden flex shadow-inner border border-slate-700/50">
+                           <div 
+                             title="Self-Consumed"
+                             className="h-full bg-emerald-500 transition-all duration-1000 ease-out relative group" 
+                             style={{ width: `${(todayForecast.economics?.selfConsumed / (todayForecast.yield || 1)) * 100}%` }}
+                           >
+                             <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                            </div>
-                           <div className="mt-4 pt-3 border-t border-slate-800/50 text-[10px] text-emerald-400 font-bold">Saved ~{config.currency}{(todayForecast.economics?.selfConsumed * config.importRate).toFixed(2)} vs grid import</div>
+                           <div 
+                             title="Exported"
+                             className="h-full bg-indigo-500 transition-all duration-1000 ease-out border-l border-white/10" 
+                             style={{ width: `${(todayForecast.economics?.exported / (todayForecast.yield || 1)) * 100}%` }}
+                           ></div>
+                           <div 
+                             title="Clipped/Lost"
+                             className="h-full bg-amber-600 transition-all duration-1000 ease-out border-l border-white/10" 
+                             style={{ width: `${(todayForecast.economics?.clipped / (todayForecast.yield || 1)) * 100}%` }}
+                           ></div>
+                        </div>
+                        <div className="flex gap-4 justify-center">
+                           <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-500"></div><span className="text-[9px] font-bold text-slate-500 uppercase">Home</span></div>
+                           <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-indigo-500"></div><span className="text-[9px] font-bold text-slate-500 uppercase">Grid Export</span></div>
+                           {todayForecast.economics?.clipped > 0 && <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-amber-600"></div><span className="text-[9px] font-bold text-slate-500 uppercase">Clipped</span></div>}
+                        </div>
+                     </div>
+
+                     {/* THE EQUATION */}
+                     <div className="grid grid-cols-1 md:grid-cols-11 items-center gap-2">
+                        {/* PART 1: SAVINGS */}
+                        <div className="md:col-span-5 p-5 bg-[#1a1b23] rounded-2xl border border-emerald-500/10 flex flex-col justify-between h-full relative overflow-hidden">
+                           <div className="absolute top-0 right-0 p-4 opacity-5"><Zap className="w-16 h-14 text-emerald-400" /></div>
+                           <div>
+                              <div className="text-[9px] font-black text-emerald-500/70 uppercase tracking-[0.2em] mb-3">1. Avoided Grid Costs</div>
+                              <div className="text-3xl font-black text-white mb-1">{config.currency}{(todayForecast.economics?.selfConsumed * config.importRate).toFixed(2)}</div>
+                              <div className="text-[10px] text-slate-500 font-bold uppercase">{todayForecast.economics?.selfConsumed.toFixed(1)} kWh used by home</div>
+                           </div>
                         </div>
 
-                        <div className="p-4 bg-[#1a1b23] rounded-xl border border-slate-800 flex flex-col justify-between">
-                           <div>
-                              <div className="flex justify-between items-start mb-2"><span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Exported</span><Navigation className="w-3 h-3 text-indigo-400" /></div>
-                              <div className="text-xl font-bold text-white">{todayForecast.economics?.exported.toFixed(1)} <span className="text-xs text-slate-500 font-normal uppercase">kWh</span></div>
-                           </div>
-                           <div className="mt-4 pt-3 border-t border-slate-800/50">
-                              {config.onMicrogenScheme ? (
-                                <span className="text-[10px] text-indigo-400 font-bold">Est. {config.currency}{(todayForecast.economics?.exported * config.exportRate).toFixed(2)} earnings today</span>
-                              ) : (
-                                <div className="space-y-1">
-                                  <div className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">Export Earnings Disabled</div>
-                                  <p className="text-[10px] text-slate-600 leading-tight">Enable export in settings to see potential value: ~{config.currency}{(todayForecast.economics?.exported * config.exportRate).toFixed(2)}</p>
-                                </div>
-                              )}
-                           </div>
-                        </div>
+                        <div className="hidden md:flex md:col-span-1 justify-center text-slate-600 font-black text-2xl">+</div>
 
-                        <div className="p-4 bg-[#1a1b23] rounded-xl border border-slate-800 flex flex-col justify-between">
+                        {/* PART 2: EARNINGS */}
+                        <div className="md:col-span-5 p-5 bg-[#1a1b23] rounded-2xl border border-indigo-500/10 flex flex-col justify-between h-full relative overflow-hidden">
+                           <div className="absolute top-0 right-0 p-4 opacity-5"><Navigation className="w-16 h-14 text-indigo-400" /></div>
                            <div>
-                              <div className="flex justify-between items-start mb-2"><span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Grid Import Needed</span><CloudRain className="w-3 h-3 text-red-400" /></div>
-                              <div className="text-xl font-bold text-white">{todayForecast.economics?.imported.toFixed(1)} <span className="text-xs text-slate-500 font-normal uppercase">kWh</span></div>
+                              <div className="text-[9px] font-black text-indigo-400/70 uppercase tracking-[0.2em] mb-3">2. Export Earnings</div>
+                              <div className="text-3xl font-black text-white mb-1">{config.currency}{(todayForecast.economics?.exported * config.exportRate).toFixed(2)}</div>
+                              <div className="text-[10px] text-slate-500 font-bold uppercase">{todayForecast.economics?.exported.toFixed(1)} kWh sent to grid</div>
                            </div>
-                           <div className="mt-4 pt-3 border-t border-slate-800/50 text-[10px] text-slate-500 font-medium">Estimated cost: {config.currency}{(todayForecast.economics?.imported * config.importRate).toFixed(2)}</div>
+                           {!config.onMicrogenScheme && (
+                              <div className="mt-4 pt-3 border-t border-slate-800/50">
+                                 <p className="text-[9px] text-amber-500/80 italic font-medium leading-tight">Enable export in settings to track this credit.</p>
+                              </div>
+                           )}
+                        </div>
+                     </div>
+
+                     {/* COST SECTION */}
+                     <div className="pt-6 border-t border-slate-800/80">
+                        <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-900/40 p-5 rounded-2xl border border-slate-800/50">
+                           <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-red-400/50"><CloudRain className="w-5 h-5" /></div>
+                              <div>
+                                 <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Remaining Grid Requirement</h4>
+                                 <p className="text-xs font-bold text-slate-300">{todayForecast.economics?.imported.toFixed(1)} kWh still needed from grid</p>
+                              </div>
+                           </div>
+                           <div className="text-right">
+                              <div className="text-[9px] text-slate-600 uppercase font-black tracking-tighter">Estimated Cost</div>
+                              <div className="text-xl font-black text-slate-400">{config.currency}{(todayForecast.economics?.imported * config.importRate).toFixed(2)}</div>
+                           </div>
                         </div>
                      </div>
 
                      {todayForecast.economics?.clipped > 0 && config.inverterACRating && !config.batteryCapacity && (
                        <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-4">
                           <AlertCircle className="w-6 h-6 text-amber-500 shrink-0" />
-                          <p className="text-[10px] font-bold text-amber-200 leading-tight">Your inverter clipped an estimated <span className="text-white text-xs">{todayForecast.economics.clipped.toFixed(1)} kWh</span> today. A battery could recover this generation.</p>
+                          <p className="text-[10px] font-bold text-amber-200 leading-tight tracking-wide">CLIPPING ALERT: Your inverter capped output at {config.inverterACRating}kW. You lost ~{todayForecast.economics.clipped.toFixed(1)} kWh today. A battery could recover this.</p>
                        </div>
                      )}
 
-                     <div className="flex items-center gap-2 text-[9px] text-slate-600 italic bg-black/20 p-2 rounded-lg border border-slate-800/50">
+                     <div className="flex items-center gap-2 text-[8px] text-slate-600 font-bold uppercase tracking-widest bg-black/20 p-2.5 rounded-lg border border-slate-800/50">
                         <Info className="w-3 h-3 shrink-0" />
-                        <span>Based on flat consumption profile (daily average divided across 24 hours). Add a time-of-use profile in v2 for more accurate results.</span>
+                        <span>Calculation based on flat daily load profile.</span>
                      </div>
                   </div>
                )}
