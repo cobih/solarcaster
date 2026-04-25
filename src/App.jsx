@@ -194,19 +194,20 @@ export default function App() {
     if (dailyTotals.length === 0 || data.length === 0) return null;
     
     const today = dailyTotals.find(d => d.dayOffset === 0);
-    const tomorrow = dailyTotals.find(d => d.dayOffset === 1);
     const now = new Date();
     const currentHour = now.getHours();
 
     // 1. Check for low generation day
-    if (today && today.yield < 2.0) {
+    if (today && today.yield < 0.5) {
       return { text: "Low generation day — not worth optimising heavy appliances today.", icon: <CloudRain className="w-5 h-5 text-slate-500" />, type: 'neutral' };
     }
 
-    // 2. If it's late (past 7pm), look at tomorrow
+    // 2. If it's late (past 7pm), show tomorrow's peak early
     if (currentHour >= 19) {
+      const tomorrow = dailyTotals.find(d => d.dayOffset === 1);
       if (!tomorrow) return null;
       const bestWindow = findPeakWindow(data.filter(d => d.dayOffset === 1));
+      if (!bestWindow) return null;
       return { 
         text: `The sun is down. Tomorrow's best window for heavy appliances is around ${bestWindow.start}.`, 
         icon: <Calendar className="w-5 h-5 text-indigo-400" />,
@@ -233,21 +234,24 @@ export default function App() {
   };
 
   const findPeakWindow = (dayData) => {
-    if (dayData.length < 3) return null;
+    if (dayData.length === 0) return null;
     let maxTwoHourSum = -1;
-    let bestStartIndex = -1;
+    let bestStartIndex = 0;
 
-    for (let i = 0; i < dayData.length - 2; i++) {
-      const sum = dayData[i].total + dayData[i+1].total;
+    // Use a moving 2-hour average
+    for (let i = 0; i < dayData.length - 1; i++) {
+      const sum = dayData[i].total + (dayData[i+1]?.total || 0);
       if (sum > maxTwoHourSum) {
         maxTwoHourSum = sum;
         bestStartIndex = i;
       }
     }
-    if (bestStartIndex === -1) return null;
+    
+    if (maxTwoHourSum <= 0) return null;
+
     return { 
       start: dayData[bestStartIndex].timeLabel, 
-      end: dayData[bestStartIndex + 2].timeLabel 
+      end: dayData[Math.min(bestStartIndex + 2, dayData.length - 1)].timeLabel 
     };
   };
 
