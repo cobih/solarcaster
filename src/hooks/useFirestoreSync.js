@@ -59,7 +59,30 @@ export const useFirestoreSync = (user, appId) => {
     const actualsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'actuals');
     const unsubActuals = onSnapshot(actualsRef, (docSnap) => {
       if (docSnap.exists()) {
-        setActuals(docSnap.data());
+        const rawActuals = docSnap.data();
+        const migratedActuals = { ...rawActuals };
+        let needsUpdate = false;
+
+        // MIGRATION: Convert old "Day, Month Date" keys to "YYYY-MM-DD"
+        // We look at the last 14 days and see if any old-style keys match
+        const now = new Date();
+        for (let i = -7; i <= 7; i++) {
+          const d = new Date(now);
+          d.setDate(d.getDate() + i);
+          const oldKey = d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+          const newKey = d.toISOString().split('T')[0];
+
+          if (rawActuals[oldKey] !== undefined && !rawActuals[newKey]) {
+            migratedActuals[newKey] = rawActuals[oldKey];
+            delete migratedActuals[oldKey];
+            needsUpdate = true;
+          }
+        }
+
+        if (needsUpdate) {
+           setDoc(actualsRef, migratedActuals); // Transparently upgrade the DB
+        }
+        setActuals(migratedActuals);
       }
     }, (err) => console.error("Actuals Sync Error:", err));
 
