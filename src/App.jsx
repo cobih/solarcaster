@@ -288,7 +288,7 @@ export default function App() {
   const selectedDayData = data.filter(d => d.dayLabel === selectedDayLabel);
   const currentHourTick = nowLabel && nowLabel.startsWith(selectedDayLabel) ? nowLabel.replace(selectedDayLabel + ' ', '') : null;
 
-  // --- APPLIANCE ADVISOR LOGIC ---
+  // --- 1. APPLIANCE ADVISOR LOGIC (v1.2) ---
   const getApplianceAdvice = () => {
     if (dailyTotals.length === 0 || data.length === 0) return null;
     
@@ -296,50 +296,65 @@ export default function App() {
     const now = new Date();
     const currentHour = now.getHours();
 
-    // 1. Check for low generation day
-    if (today && today.yield < 0.5) {
-      return { text: "Low generation day — not worth optimising heavy appliances today.", icon: <CloudRain className="w-5 h-5 text-slate-500" />, type: 'neutral' };
+    // Rule: Low generation day
+    if (today && today.yield < 1.0) {
+      return "Low generation today — not worth optimising around solar.";
     }
 
-    // 2. If it's late (past 7pm), show tomorrow's peak early
-    if (currentHour >= 19) {
-      const tomorrow = dailyTotals.find(d => d.dayOffset === 1);
-      if (!tomorrow) return null;
-      const bestWindow = findPeakWindow(data.filter(d => d.dayOffset === 1));
-      if (!bestWindow) return null;
-      return { 
-        text: `The sun is down. Tomorrow's best window for heavy appliances is around ${bestWindow.start}.`, 
-        icon: <Calendar className="w-5 h-5 text-indigo-400" />,
-        type: 'info'
-      };
+    // Rule: Overnight (past 20:00) -> Show tomorrow
+    if (currentHour >= 20) {
+      const tomorrowData = data.filter(d => d.dayOffset === 1);
+      const best = findPeakWindow(tomorrowData);
+      return best ? `Tomorrow's peak is around ${best.start}.` : null;
     }
 
-    // 3. Find today's peak window
     const todayData = data.filter(d => d.dayOffset === 0);
-    const bestWindow = findPeakWindow(todayData);
-    
-    if (!bestWindow) return null;
+    const mainPeak = findPeakWindow(todayData);
+    if (!mainPeak) return null;
 
-    const [startH] = bestWindow.start.split(':').map(Number);
-    const [endH] = bestWindow.end.split(':').map(Number);
+    // Check for Bimodal (E/W split)
+    const strings = config.strings || [];
+    let bimodalNote = "";
+    if (strings.length >= 2) {
+      const peaks = strings.map(s => ({ name: s.name, peak: findPeakWindow(todayData, s.id) })).filter(p => p.peak);
+      if (peaks.length >= 2) {
+        // Sort by peak value descending (if we had values, but findPeakWindow just gives times)
+        // Let's assume we want to mention both if they are > 2 hours apart
+        const timeToMin = (t) => { const [h,m] = t.split(':').map(Number); return h * 60 + m; };
+        if (Math.abs(timeToMin(peaks[0].peak.start) - timeToMin(peaks[1].peak.start)) >= 120) {
+           const primary = peaks[0]; // Simplification: pick first as primary for string
+           const secondary = peaks[1];
+           bimodalNote = ` Your ${primary.name} peaks around ${primary.peak.start} — best window for heavy use. ${secondary.name} peaked at ${secondary.peak.start}.`;
+        }
+      }
+    }
+
+    if (bimodalNote) return `⚡ ${bimodalNote}`;
+
+    const [startH] = mainPeak.start.split(':').map(Number);
+    const [endH] = mainPeak.end.split(':').map(Number);
 
     if (currentHour >= startH && currentHour < endH) {
-      return { text: "Best solar window is RIGHT NOW — great time for the dishwasher or washing machine.", icon: <Zap className="w-5 h-5 text-emerald-400 animate-pulse" />, type: 'success' };
+      return "Your best solar window is right now — good time to run the washing machine or dishwasher.";
     } else if (currentHour < startH) {
-      return { text: `Peak output expected between ${bestWindow.start} and ${bestWindow.end}. Hold off on heavy appliances until then.`, icon: <Sun className="w-5 h-5 text-amber-400" />, type: 'wait' };
+      return `Peak output expected between ${mainPeak.start}–${mainPeak.end}. Hold off on heavy appliances until then.`;
     } else {
-      return { text: `The best window was earlier today (${bestWindow.start}). Plan for tomorrow morning!`, icon: <History className="w-5 h-5 text-slate-400" />, type: 'neutral' };
+      // Already passed
+      const tomorrowData = data.filter(d => d.dayOffset === 1);
+      const nextBest = findPeakWindow(tomorrowData);
+      return `Your best window today was ${mainPeak.start}. Tomorrow's peak is around ${nextBest?.start || 'noon'}.`;
     }
   };
 
-  const findPeakWindow = (dayData) => {
+  const findPeakWindow = (dayData, stringId = null) => {
     if (dayData.length === 0) return null;
     let maxTwoHourSum = -1;
     let bestStartIndex = 0;
 
-    // Use a moving 2-hour average
     for (let i = 0; i < dayData.length - 1; i++) {
-      const sum = dayData[i].total + (dayData[i+1]?.total || 0);
+      const val1 = stringId ? (dayData[i].stringPowers?.[stringId] || 0) : dayData[i].total;
+      const val2 = stringId ? (dayData[i+1].stringPowers?.[stringId] || 0) : dayData[i+1].total;
+      const sum = val1 + val2;
       if (sum > maxTwoHourSum) {
         maxTwoHourSum = sum;
         bestStartIndex = i;
@@ -354,7 +369,7 @@ export default function App() {
     };
   };
 
-  const advice = getApplianceAdvice();
+  const adviceText = getApplianceAdvice();
 
   if (authLoading) return <div className="flex items-center justify-center h-screen bg-[#1a1b23] text-white"><MapPin className="w-12 h-12 text-indigo-500 animate-pulse" /></div>;
   
@@ -558,28 +573,6 @@ export default function App() {
         {activeTab === 'today' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
             
-            {/* APPLIANCE ADVISOR CARD */}
-            {advice && (
-              <div className={`p-4 rounded-2xl border flex items-center gap-4 transition-all duration-500 ${
-                advice.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]' : 
-                advice.type === 'wait' ? 'bg-amber-500/10 border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.1)]' :
-                'bg-slate-800/40 border-slate-700/50'
-              }`}>
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
-                   advice.type === 'success' ? 'bg-emerald-500/20' : 
-                   advice.type === 'wait' ? 'bg-amber-500/20' : 
-                   'bg-slate-700/50'
-                }`}>
-                  {advice.icon}
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Advisor Insight</h3>
-                  <p className="text-sm font-bold text-white leading-tight">{advice.text}</p>
-                </div>
-                {advice.type === 'success' && <Zap className="w-4 h-4 text-emerald-500 animate-bounce" />}
-              </div>
-            )}
-
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="bg-[#252630] p-5 rounded-xl border border-slate-700/50 shadow-sm flex flex-col justify-between"><div><p className="text-slate-400 text-sm font-medium mb-1">Forecast Today</p><div className="flex items-end gap-2"><h2 className="text-3xl font-bold text-white">{todayForecast.yield.toFixed(1)}</h2><span className="text-slate-500 mb-1 font-medium">kWh</span></div></div><div className="mt-4 space-y-1">{(config.strings || []).map((s, idx) => (<div key={s.id} className="flex items-center gap-2 text-[10px] text-slate-500"><div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: STRING_COLORS[idx % STRING_COLORS.length] }}></div><span className="truncate flex-1 font-medium">{s.name}:</span><Zap className="w-2 h-2 text-indigo-500/30" /><span className="font-mono text-slate-400">{(todayForecast.strings?.[s.id] || 0).toFixed(1)}</span></div>))}</div></div>
               <div className="bg-gradient-to-br from-[#1e293b] to-[#0f172a] p-5 rounded-xl border border-indigo-500/30 shadow-sm flex flex-col justify-between"><div><label className="text-indigo-300 text-sm font-medium mb-1 flex items-center gap-2"><Zap className="w-4 h-4 text-indigo-400" aria-hidden="true" /> Today's Actual</label><div className="mt-2 flex items-center gap-2"><input type="number" value={actuals[todayForecast.isoDate] || ''} onChange={e => { saveActualToCloud(todayForecast.isoDate, e.target.value); logAnalyticsEvent('actual_entry', { day: 'today' }); }} aria-label="Enter inverter reading" className="w-full bg-transparent border-b-2 border-indigo-500 p-1 text-3xl font-bold text-white outline-none focus:border-indigo-400 transition-colors" placeholder="0.0" /><span className="text-slate-500 font-medium text-xs">kWh</span></div></div>
@@ -640,6 +633,16 @@ export default function App() {
                {config.showEconomics && (
                   <div className="px-6 pb-8 space-y-8 animate-in slide-in-from-top-4 duration-500">
                      
+                     {/* APPLIANCE ADVISOR INSIGHT (v1.2) */}
+                     {adviceText && (
+                        <div className="bg-indigo-500/10 border border-indigo-500/20 p-3 rounded-xl flex items-center gap-3">
+                           <Zap className="w-4 h-4 text-indigo-400 shrink-0" />
+                           <p className="text-[11px] font-bold text-slate-200 leading-tight">
+                              Best window today: <span className="text-indigo-300">{adviceText}</span> — good time for high-draw appliances.
+                           </p>
+                        </div>
+                     )}
+
                      {/* ENERGY PATH BAR */}
                      <div className="space-y-3">
                         <div className="flex justify-between items-end px-1">
