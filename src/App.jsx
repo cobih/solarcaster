@@ -60,7 +60,7 @@ export default function App() {
   const [manualCoords, setManualCoords] = useState({ lat: 53.3767, long: -6.3286 });
 
   const [visibleSeries, setVisibleSeries] = useState({
-    total: true, energy: true, clouds: true, strings: true
+    total: true, energy: true, clouds: true, strings: true, uncertainty: true
   });
 
   const STRING_COLORS = ['#f59e0b', '#ef4444', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'];
@@ -495,7 +495,7 @@ export default function App() {
               <div className="hidden md:flex bg-[#252630] p-5 rounded-xl border border-slate-700/50 shadow-sm flex-col justify-between"><div><p className="text-slate-400 text-sm font-medium mb-1">Forecast Tomorrow</p><div className="flex items-end gap-2"><h2 className="text-3xl font-bold text-white">{tomorrowForecast.yield.toFixed(1)}</h2><span className="text-slate-500 mb-1 font-medium text-xs">kWh</span></div></div><div className="mt-4 flex items-center gap-2 text-[10px] text-blue-500 font-bold uppercase tracking-widest"><Calendar className="w-3 h-3" /> 24h Prediction</div></div>
             </div>
             <div className="bg-[#252630] p-4 md:p-6 rounded-2xl border border-slate-700/50 shadow-lg">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6"><h2 className="text-lg font-semibold text-white flex items-center gap-2"><Activity className="w-5 h-5 text-indigo-400" /> Hourly Profile</h2><div className="flex flex-wrap gap-2">{['clouds', 'total', 'energy', 'strings'].map(k => (<button key={k} onClick={() => toggleSeries(k)} className={`px-2 py-1 rounded text-[9px] font-black uppercase border transition-all shadow-sm ${visibleSeries[k] ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-transparent border-slate-800 text-slate-600'}`}>{k}</button>))}</div></div>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6"><h2 className="text-lg font-semibold text-white flex items-center gap-2"><Activity className="w-5 h-5 text-indigo-400" /> Hourly Profile</h2><div className="flex flex-wrap gap-2">{['clouds', 'total', 'energy', 'strings', 'uncertainty'].map(k => (<button key={k} onClick={() => toggleSeries(k)} className={`px-2 py-1 rounded text-[9px] font-black uppercase border transition-all shadow-sm ${visibleSeries[k] ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-transparent border-slate-800 text-slate-600'}`}>{k}</button>))}</div></div>
               <div className="h-[250px] w-full"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={selectedDayData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" /><XAxis dataKey="timeLabel" interval={3} stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} /><YAxis stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} /><YAxis yAxisId="right" orientation="right" stroke="#818cf8" fontSize={10} axisLine={false} tickLine={false} unit="kWh" /><Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} content={({ active, payload, label }) => { if (active && payload && payload.length) return (<div className="bg-[#1e293b] border border-slate-700 p-3 rounded-lg shadow-xl text-[10px] space-y-1"><p className="font-bold text-slate-400 mb-1">{label}</p>{payload.map((e, idx) => (<div key={idx} className="flex justify-between gap-4"><span style={{ color: e.color }} className="font-bold">{e.name}:</span><span className="text-white font-mono">{e.value} {e.dataKey === 'cumulativeYield' ? 'kWh' : (e.dataKey === 'cloudCover' ? '%' : 'kW')}</span></div>))}</div>); return null; }} />{visibleSeries.clouds && <Area yAxisId="right" type="monotone" dataKey="cloudCover" name="Cloud %" stroke="none" fill="#475569" fillOpacity={0.1} />}{visibleSeries.total && <Area type="monotone" dataKey="total" name="Total Power" stroke="#fde047" fill="#fde047" fillOpacity={0.1} strokeWidth={2} />}{visibleSeries.strings && (config.strings || []).map((s, idx) => <Line key={s.id} type="monotone" dataKey={`stringPowers.${s.id}`} name={s.name} stroke={STRING_COLORS[idx % STRING_COLORS.length]} strokeWidth={1} dot={false} strokeDasharray="5 5" />)}{visibleSeries.energy && <Line yAxisId="right" type="monotone" dataKey="cumulativeYield" name="Energy" stroke="#818cf8" strokeWidth={3} dot={false} />}{currentHourTick && <ReferenceLine x={currentHourTick} stroke="#818cf8" strokeDasharray="4 4" />}</ComposedChart></ResponsiveContainer></div>
             </div>
 
@@ -545,6 +545,13 @@ export default function App() {
               </button>
               {showForecastChart && (
                 <div className="p-6 pt-0 animate-in zoom-in-95 duration-200">
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {['uncertainty'].map(k => (
+                      <button key={k} onClick={() => toggleSeries(k)} className={`px-2 py-1 rounded text-[9px] font-black uppercase border transition-all shadow-sm ${visibleSeries[k] ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-transparent border-slate-800 text-slate-600'}`}>
+                        {visibleSeries[k] ? "Hide Uncertainty" : "Show Uncertainty"}
+                      </button>
+                    ))}
+                  </div>
                   <div className="h-[220px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={data} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
@@ -565,10 +572,10 @@ export default function App() {
                               return (
                                 <div className="bg-[#1e293b] border border-slate-700 p-3 rounded-lg shadow-xl text-[10px] space-y-1">
                                   <p className="font-bold text-slate-400 mb-1">{label}</p>
-                                  <div className="flex justify-between gap-4"><span className="text-emerald-400">P90 (Optimistic):</span><span className="text-white font-mono">{p.p90} kW</span></div>
-                                  <div className="flex justify-between gap-4"><span className="text-indigo-300">P50 (Likely):</span><span className="text-white font-mono font-bold">{p.p50} kW</span></div>
-                                  <div className="flex justify-between gap-4"><span className="text-amber-500">P10 (Pessimistic):</span><span className="text-white font-mono">{p.p10} kW</span></div>
-                                  <div className="mt-1 pt-1 border-t border-slate-800 text-[8px] text-slate-500">Cloud: {p.cloudCover}%</div>
+                                  <div className="flex justify-between gap-4"><span className="text-emerald-400 font-bold uppercase">Optimistic:</span><span className="text-white font-mono">{p.p90} kW</span></div>
+                                  <div className="flex justify-between gap-4"><span className="text-indigo-300 font-bold uppercase">Most Likely:</span><span className="text-white font-mono font-bold text-sm">{p.p50} kW</span></div>
+                                  <div className="flex justify-between gap-4"><span className="text-amber-500 font-bold uppercase">Conservative:</span><span className="text-white font-mono">{p.p10} kW</span></div>
+                                  <div className="mt-1 pt-1 border-t border-slate-800 text-[8px] text-slate-500 italic">Uncertainty based on {p.cloudCover}% cloud cover</div>
                                 </div>
                               );
                             }
@@ -576,9 +583,9 @@ export default function App() {
                           }}
                         />
                         {/* UNCERTAINTY BAND */}
-                        <Area type="monotone" dataKey={['p10', 'p90']} stroke="none" fill="#fde047" fillOpacity={0.12} name="Uncertainty Range" />
+                        {visibleSeries.uncertainty && <Area type="monotone" dataKey={['p10', 'p90']} stroke="none" fill="#fde047" fillOpacity={0.15} name="Uncertainty" />}
                         {/* MOST LIKELY LINE */}
-                        <Area type="monotone" dataKey="p50" stroke="#fde047" fill="url(#colorYellow)" strokeWidth={2} name="Most Likely" />
+                        <Area type="monotone" dataKey="p50" stroke="#fde047" fill="url(#colorYellow)" strokeWidth={3} name="Most Likely" />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
