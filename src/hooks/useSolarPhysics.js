@@ -179,9 +179,9 @@ export const useSolarPhysics = (config, dbSyncing) => {
              currentBatterySoC += charge;
              exported = net - charge;
           } else {
-             selfConsumed = generation;
              const deficit = Math.abs(net);
              const discharge = Math.min(deficit, currentBatterySoC);
+             selfConsumed = generation + discharge;
              currentBatterySoC -= discharge;
              imported = deficit - discharge;
           }
