@@ -153,7 +153,7 @@ export const useFirestoreSync = (user, appId) => {
     }
   };
 
-  const publishForecast = async (dailyTotals) => {
+  const publishForecast = async (dailyTotals, hourlyData) => {
     if (!user || !config.apiEnabled || isDemo) return;
     try {
       const publicRef = doc(db, 'public_forecasts', user.uid);
@@ -162,10 +162,19 @@ export const useFirestoreSync = (user, appId) => {
         yield: Number(d.yield.toFixed(2)),
         offset: d.dayOffset
       }));
+      const hourly = (hourlyData || []).map(h => ({
+        time: h.date.toISOString(),
+        kw: h.p50, // Backwards compatibility
+        p10: h.p10,
+        p50: h.p50,
+        p90: h.p90
+      }));
       await setDoc(publicRef, { 
         lastUpdate: new Date().toISOString(),
         forecast: summary,
-        unit: "kWh"
+        hourly,
+        unit: "kWh",
+        note: "Use p50 for most likely prediction. kw is deprecated and will be removed in v2."
       });
     } catch (e) {
       console.error("Public publish failed:", e);

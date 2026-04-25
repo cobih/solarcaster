@@ -92,15 +92,34 @@ export const useSolarPhysics = (config, dbSyncing) => {
           const dhi = hourly.diffuse_radiation[i];
           const solarPos = getSolarPosition(date, lat, long);
 
-          let totalKw = 0;
+          let totalP10 = 0;
+          let totalP50 = 0; // Same as totalKw
+          let totalP90 = 0;
           const stringPowers = {};
+
+          const clouds = hourly.cloudcover[i];
+          let p10Multiplier = 0.82; // Medium default
+          let p90Multiplier = 1.18; // Medium default
+
+          if (clouds <= 20) {
+            p10Multiplier = 0.92; p90Multiplier = 1.08;
+          } else if (clouds >= 60) {
+            p10Multiplier = 0.70; p90Multiplier = 1.30;
+          }
 
           // Dynamic multi-string calculation
           (config.strings || []).forEach(s => {
             const stringCapacity = (s.count * (s.wattage || 465)) / 1000;
-            const pwr = calculateArrayPower(dni, dhi, temp, solarPos, s.azimuth, s.tilt, stringCapacity, config.eff);
-            totalKw += pwr;
-            stringPowers[s.id] = Number(pwr.toFixed(2));
+            const p50 = calculateArrayPower(dni, dhi, temp, solarPos, s.azimuth, s.tilt, stringCapacity, config.eff);
+            
+            const p10 = p50 * p10Multiplier;
+            const p90 = Math.min(stringCapacity, p50 * p90Multiplier); // Cap at rated capacity
+            
+            totalP10 += p10;
+            totalP50 += p50;
+            totalP90 += p90;
+            
+            stringPowers[s.id] = Number(p50.toFixed(2));
           });
 
           const localTimeLabel = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -127,13 +146,16 @@ export const useSolarPhysics = (config, dbSyncing) => {
             dayLabel, 
             timeLabel: localTimeLabel, 
             fullLabel,
-            total: Number(totalKw.toFixed(2)),
+            total: Number(totalP50.toFixed(2)),
+            p10: Number(totalP10.toFixed(2)),
+            p50: Number(totalP50.toFixed(2)),
+            p90: Number(totalP90.toFixed(2)),
             stringPowers,
-            cloudCover: hourly.cloudcover[i],
+            cloudCover: clouds,
             cumulativeYield: Number(totalsByDay[dayLabel].yield.toFixed(2)),
           });
 
-          totalsByDay[dayLabel].yield += totalKw;
+          totalsByDay[dayLabel].yield += totalP50;
           // Accumulate per-string daily yield
           Object.keys(stringPowers).forEach(id => {
             totalsByDay[dayLabel].strings[id] = (totalsByDay[dayLabel].strings[id] || 0) + stringPowers[id];

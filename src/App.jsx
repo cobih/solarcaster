@@ -76,10 +76,10 @@ export default function App() {
   }, [user?.uid, isDemo, user]);
 
   useEffect(() => {
-    if (config.apiEnabled && dailyTotals.length > 0 && !isDemo) {
-      publishForecast(dailyTotals);
+    if (config.apiEnabled && dailyTotals.length > 0 && data.length > 0 && !isDemo) {
+      publishForecast(dailyTotals, data);
     }
-  }, [dailyTotals, config.apiEnabled, publishForecast, isDemo]);
+  }, [dailyTotals, data, config.apiEnabled, publishForecast, isDemo]);
 
   const toggleSeries = (key) => {
     setVisibleSeries(prev => ({ ...prev, [key]: !prev[key] }));
@@ -108,7 +108,6 @@ export default function App() {
     } catch (err) { console.error(err); }
   };
 
-  const maxKw = data.length > 0 ? Math.max(...data.map(d => d.total)) : 0;
   const todayForecast = dailyTotals.find(d => d.dayOffset === 0) || { yield: 0, eastYield: 0, westYield: 0, dayLabel: '', strings: {} };
   const tomorrowForecast = dailyTotals.find(d => d.dayOffset === 1) || { yield: 0, eastYield: 0, westYield: 0 };
 
@@ -427,6 +426,9 @@ export default function App() {
                       <button onClick={() => { window.open(`https://firestore.googleapis.com/v1/projects/solar-forecaster-63320/databases/(default)/documents/public_forecasts/${user?.uid || 'demo-user'}`, '_blank'); logAnalyticsEvent('api_open_json'); }} className="px-2 bg-indigo-600 rounded text-[9px] font-bold text-white uppercase">Open</button>
                       <button onClick={() => { navigator.clipboard.writeText(`https://firestore.googleapis.com/v1/projects/solar-forecaster-63320/databases/(default)/documents/public_forecasts/${user?.uid || 'demo-user'}`); alert("URL copied!"); }} className="px-2 bg-slate-800 rounded text-[9px] font-bold text-white uppercase">Copy</button>
                     </div>
+                    <p className="text-[9px] text-indigo-400/70 italic leading-tight mt-1">
+                      Note: For battery pre-charging, use the <strong>P10</strong> figure. The 'kw' field is deprecated and will be removed in v2.
+                    </p>
                   </div>
                 ) : (
                   <p className="text-[9px] text-slate-600 italic leading-tight">Enable to generate a public JSON endpoint for your smart home.</p>
@@ -533,7 +535,59 @@ export default function App() {
 
         {activeTab === 'forecast' && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 pb-8">
-            <div className="bg-[#252630] rounded-2xl border border-slate-700/50 overflow-hidden shadow-lg"><button onClick={() => setShowForecastChart(!showForecastChart)} className="w-full p-4 flex justify-between items-center hover:bg-[#2d2e3a] transition-colors"><div className="flex items-center gap-2"><TrendingUp className="w-5 h-5 text-indigo-400" /><h2 className="text-sm font-black text-white uppercase tracking-widest">Visual Outlook</h2></div>{showForecastChart ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}</button>{showForecastChart && (<div className="p-6 pt-0 animate-in zoom-in-95 duration-200"><div className="h-[200px] w-full"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}><defs><linearGradient id="colorYellow" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#fde047" stopOpacity={0.4} /><stop offset="95%" stopColor="#fde047" stopOpacity={0.0} /></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" /><XAxis dataKey="fullLabel" tickFormatter={(val) => val.split(' ')[0]} interval={23} stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} /><YAxis stroke="#64748b" fontSize={11} domain={[0, Math.ceil(maxKw)]} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} /><Area type="monotone" dataKey="total" name="Total kW" stroke="#fde047" fill="url(#colorYellow)" strokeWidth={2} /></AreaChart></ResponsiveContainer></div></div>)}</div>
+            <div className="bg-[#252630] rounded-2xl border border-slate-700/50 overflow-hidden shadow-lg">
+              <button onClick={() => setShowForecastChart(!showForecastChart)} className="w-full p-4 flex justify-between items-center hover:bg-[#2d2e3a] transition-colors">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-indigo-400" />
+                  <h2 className="text-sm font-black text-white uppercase tracking-wider">Visual Outlook</h2>
+                </div>
+                {showForecastChart ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
+              </button>
+              {showForecastChart && (
+                <div className="p-6 pt-0 animate-in zoom-in-95 duration-200">
+                  <div className="h-[220px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={data} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorYellow" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#fde047" stopOpacity={0.4} />
+                            <stop offset="95%" stopColor="#fde047" stopOpacity={0.0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
+                        <XAxis dataKey="fullLabel" tickFormatter={(val) => val.split(' ')[0]} interval={23} stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} />
+                        <YAxis stroke="#64748b" fontSize={11} domain={[0, 'auto']} axisLine={false} tickLine={false} unit="kW" />
+                        <Tooltip 
+                          contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px', fontSize: '10px' }}
+                          content={({ active, payload, label }) => {
+                            if (active && payload && payload.length) {
+                              const p = payload[0].payload;
+                              return (
+                                <div className="bg-[#1e293b] border border-slate-700 p-3 rounded-lg shadow-xl text-[10px] space-y-1">
+                                  <p className="font-bold text-slate-400 mb-1">{label}</p>
+                                  <div className="flex justify-between gap-4"><span className="text-emerald-400">P90 (Optimistic):</span><span className="text-white font-mono">{p.p90} kW</span></div>
+                                  <div className="flex justify-between gap-4"><span className="text-indigo-300">P50 (Likely):</span><span className="text-white font-mono font-bold">{p.p50} kW</span></div>
+                                  <div className="flex justify-between gap-4"><span className="text-amber-500">P10 (Pessimistic):</span><span className="text-white font-mono">{p.p10} kW</span></div>
+                                  <div className="mt-1 pt-1 border-t border-slate-800 text-[8px] text-slate-500">Cloud: {p.cloudCover}%</div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                        {/* UNCERTAINTY BAND */}
+                        <Area type="monotone" dataKey={['p10', 'p90']} stroke="none" fill="#fde047" fillOpacity={0.12} name="Uncertainty Range" />
+                        {/* MOST LIKELY LINE */}
+                        <Area type="monotone" dataKey="p50" stroke="#fde047" fill="url(#colorYellow)" strokeWidth={2} name="Most Likely" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <p className="text-[9px] text-slate-500 text-center uppercase tracking-widest mt-2">
+                    Shaded area = likely range based on cloud cover uncertainty
+                  </p>
+                </div>
+              )}
+            </div>
             <div className="grid grid-cols-1 gap-3">{dailyTotals.filter(d => d.dayOffset >= 0).map((day) => { const maxWeekYield = Math.max(...dailyTotals.map(d => d.yield)); const relScale = (day.yield / maxWeekYield) * 100; const isExpanded = expandedForecastDay === day.dayLabel; return (<div key={day.dayLabel} className={`bg-[#252630] rounded-2xl border transition-all duration-300 ${isExpanded ? 'border-indigo-500/50 ring-1 ring-indigo-500/20 shadow-lg' : 'border-slate-800 shadow-sm'}`}><button onClick={() => { setExpandedForecastDay(isExpanded ? null : day.dayLabel); logAnalyticsEvent('expand_forecast_day', { day: day.dayLabel }); }} className="w-full p-4 flex items-center gap-4 text-left"><div className="text-center min-w-[56px] border-r border-slate-800 pr-4"><div className="text-[10px] text-slate-500 font-black uppercase tracking-widest">{day.date.toLocaleDateString([], { weekday: 'short' })}</div><div className="text-xl font-black text-white">{day.date.toLocaleDateString([], { day: 'numeric' })}</div></div><div className="flex-1 min-w-0"><div className="flex justify-between items-end mb-1.5"><span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Predicted</span><span className="text-sm font-black text-white">{day.yield.toFixed(1)} <span className="text-[10px] text-slate-500 font-normal uppercase font-black tracking-widest">kWh</span></span></div><div className="h-2 w-full bg-slate-800/50 rounded-full overflow-hidden shadow-inner"><div className={`h-full rounded-full transition-all duration-1000 ${day.yield > maxWeekYield*0.8 ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.4)]' : 'bg-indigo-500'}`} style={{ width: `${relScale}%` }}></div></div></div><div className="pl-2 flex flex-col items-center">{day.yield > maxWeekYield*0.8 ? <Sun className="w-6 h-6 text-amber-400" /> : day.yield < maxWeekYield*0.4 ? <CloudRain className="w-6 h-6 text-slate-500" /> : <Cloud className="w-6 h-6 text-indigo-400/60" />}{isExpanded ? <ChevronUp className="w-3 h-3 text-slate-600 mt-1" /> : <ChevronDown className="w-3 h-3 text-slate-600 mt-1" />}</div></button>{isExpanded && (<div className="p-4 pt-0 animate-in slide-in-from-top-2 duration-300"><div className="h-[180px] w-full mt-2 bg-[#1a1b23]/50 rounded-xl p-2 border border-slate-800/50 shadow-inner"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={data.filter(d => d.dayLabel === day.dayLabel)} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" /><XAxis dataKey="timeLabel" interval={3} stroke="#475569" fontSize={9} axisLine={false} tickLine={false} /><YAxis stroke="#475569" fontSize={9} axisLine={false} tickLine={false} /><Area type="monotone" dataKey="total" name="kW" stroke="#fde047" fill="#fde047" fillOpacity={0.1} strokeWidth={2} /><Line type="monotone" dataKey="cumulativeYield" yAxisId="right" stroke="#818cf8" strokeWidth={2} dot={false} /><YAxis yAxisId="right" orientation="right" hide={true} /><Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', fontSize: '10px' }} itemStyle={{ padding: '2px 0' }} /></ComposedChart></ResponsiveContainer></div></div>)}</div>); })}</div>
           </div>
         )}
