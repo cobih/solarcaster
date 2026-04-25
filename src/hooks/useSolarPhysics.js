@@ -85,7 +85,6 @@ export const useSolarPhysics = (config, dbSyncing) => {
         let currentNowLabel = "";
 
         let currentBatterySoC = 0;
-        let lastISO = null;
 
         for (let i = 0; i < hourly.time.length; i++) {
           const timeStr = hourly.time[i];
@@ -140,11 +139,6 @@ export const useSolarPhysics = (config, dbSyncing) => {
           // Robust Local ISO Key (YYYY-MM-DD)
           const isoDate = `${itemMidnight.getFullYear()}-${String(itemMidnight.getMonth() + 1).padStart(2, '0')}-${String(itemMidnight.getDate()).padStart(2, '0')}`;
           
-          if (isoDate !== lastISO) {
-             currentBatterySoC = 0; // Reset battery at start of day
-             lastISO = isoDate;
-          }
-
           if (!totalsByDay[dayLabel]) {
             totalsByDay[dayLabel] = { 
               date: itemMidnight, 
