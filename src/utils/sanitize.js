@@ -37,6 +37,8 @@ export const sanitizeConfig = (config) => {
     locationSet: !!config.locationSet, // Track if user has completed setup
     arraysSet: !!config.arraysSet,
     apiEnabled: !!config.apiEnabled,
+    excludedDays: Array.isArray(config.excludedDays) ? config.excludedDays : [],
+    acknowledgedOutliers: Array.isArray(config.acknowledgedOutliers) ? config.acknowledgedOutliers : [],
     schemaVersion: 2, // Force current schema
     strings: (config.strings || []).map(s => ({
       ...s,

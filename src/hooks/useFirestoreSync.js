@@ -22,7 +22,9 @@ export const useFirestoreSync = (user, appId) => {
       { id: 'd1', name: "Main Roof (South)", azimuth: 180, tilt: 35, count: 12, wattage: 400 }
     ] : [],
     effHistory: [],
-    apiEnabled: isDemo, // Enable by default for demo
+    apiEnabled: isDemo,
+    excludedDays: [],
+    acknowledgedOutliers: [],
   });
 
   const [actuals, setActuals] = useState(isDemo ? {
@@ -44,6 +46,8 @@ export const useFirestoreSync = (user, appId) => {
         if (data.lat !== undefined && data.long !== undefined) migrated.locationSet = true;
         if (!data.effHistory) migrated.effHistory = [];
         if (data.apiEnabled === undefined) migrated.apiEnabled = false;
+        if (!data.excludedDays) migrated.excludedDays = [];
+        if (!data.acknowledgedOutliers) migrated.acknowledgedOutliers = [];
         if (data.strings && data.strings.length > 0) {
            migrated.arraysSet = true;
            migrated.strings = data.strings.map(s => ({ ...s, wattage: s.wattage || 465 }));

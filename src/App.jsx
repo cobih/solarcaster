@@ -107,7 +107,8 @@ export default function App() {
   let daysEntered = 0;
   dailyTotals.forEach(day => {
     const enteredVal = Number(actuals[day.isoDate]);
-    if (enteredVal > 0) {
+    const isExcluded = (config.excludedDays || []).includes(day.isoDate);
+    if (enteredVal > 0 && !isExcluded) {
       sumActuals += enteredVal;
       sumModel += day.yield;
       daysEntered++;
@@ -183,6 +184,18 @@ export default function App() {
     const s = { id: 's' + Date.now(), name: `String ${config.strings.length + 1}`, azimuth: 180, tilt: 35, count: 10, wattage: 465 };
     saveConfigToCloud({ ...config, strings: [...config.strings, s] });
   };
+  const excludeDay = (isoDate) => {
+    const newExcluded = [...(config.excludedDays || []), isoDate];
+    saveConfigToCloud({ ...config, excludedDays: newExcluded });
+    logAnalyticsEvent('outlier_exclude', { day: isoDate });
+  };
+
+  const acknowledgeOutlier = (isoDate) => {
+    const newAck = [...(config.acknowledgedOutliers || []), isoDate];
+    saveConfigToCloud({ ...config, acknowledgedOutliers: newAck });
+    logAnalyticsEvent('outlier_acknowledge', { day: isoDate });
+  };
+
   const removeString = (id) => saveConfigToCloud({ ...config, strings: config.strings.filter(s => s.id !== id) });
   const updateString = (id, f, v) => saveConfigToCloud({ ...config, strings: config.strings.map(s => s.id === id ? { ...s, [f]: v } : s) });
 
@@ -393,7 +406,29 @@ export default function App() {
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="bg-[#252630] p-5 rounded-xl border border-slate-700/50 shadow-sm flex flex-col justify-between"><div><p className="text-slate-400 text-sm font-medium mb-1">Forecast Today</p><div className="flex items-end gap-2"><h2 className="text-3xl font-bold text-white">{todayForecast.yield.toFixed(1)}</h2><span className="text-slate-500 mb-1 font-medium">kWh</span></div></div><div className="mt-4 space-y-1">{(config.strings || []).map((s, idx) => (<div key={s.id} className="flex items-center gap-2 text-[10px] text-slate-500"><div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: STRING_COLORS[idx % STRING_COLORS.length] }}></div><span className="truncate flex-1 font-medium">{s.name}:</span><Zap className="w-2 h-2 text-indigo-500/30" /><span className="font-mono text-slate-400">{(todayForecast.strings?.[s.id] || 0).toFixed(1)}</span></div>))}</div></div>
-              <div className="bg-gradient-to-br from-[#1e293b] to-[#0f172a] p-5 rounded-xl border border-indigo-500/30 shadow-sm flex flex-col justify-between"><div><label className="text-indigo-300 text-sm font-medium mb-1 flex items-center gap-2"><Zap className="w-4 h-4 text-indigo-400" aria-hidden="true" /> Today's Actual</label><div className="mt-2 flex items-center gap-2"><input type="number" value={actuals[todayForecast.isoDate] || ''} onChange={e => { saveActualToCloud(todayForecast.isoDate, e.target.value); logAnalyticsEvent('actual_entry', { day: 'today' }); }} aria-label="Enter inverter reading" className="w-full bg-transparent border-b-2 border-indigo-500 p-1 text-3xl font-bold text-white outline-none focus:border-indigo-400 transition-colors" placeholder="0.0" /><span className="text-slate-500 font-medium text-xs">kWh</span></div></div><p className="mt-4 text-[10px] text-slate-500 italic leading-tight">Syncs to cloud for model tuning.</p></div>
+              <div className="bg-gradient-to-br from-[#1e293b] to-[#0f172a] p-5 rounded-xl border border-indigo-500/30 shadow-sm flex flex-col justify-between"><div><label className="text-indigo-300 text-sm font-medium mb-1 flex items-center gap-2"><Zap className="w-4 h-4 text-indigo-400" aria-hidden="true" /> Today's Actual</label><div className="mt-2 flex items-center gap-2"><input type="number" value={actuals[todayForecast.isoDate] || ''} onChange={e => { saveActualToCloud(todayForecast.isoDate, e.target.value); logAnalyticsEvent('actual_entry', { day: 'today' }); }} aria-label="Enter inverter reading" className="w-full bg-transparent border-b-2 border-indigo-500 p-1 text-3xl font-bold text-white outline-none focus:border-indigo-400 transition-colors" placeholder="0.0" /><span className="text-slate-500 font-medium text-xs">kWh</span></div></div>
+                {/* OUTLIER WARNING */}
+                {(() => {
+                   const val = Number(actuals[todayForecast.isoDate]);
+                   if (!val || (config.excludedDays || []).includes(todayForecast.isoDate) || (config.acknowledgedOutliers || []).includes(todayForecast.isoDate)) return null;
+                   const delta = (val - todayForecast.yield) / todayForecast.yield;
+                   if (delta < -0.4 || delta > 0.5) {
+                     return (
+                       <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl animate-in slide-in-from-top-2">
+                         <div className="flex gap-3 mb-3">
+                           <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+                           <p className="text-[10px] font-bold text-amber-200 leading-tight">Wait, {val} kWh is {Math.abs(delta*100).toFixed(0)}% {delta < 0 ? 'below' : 'above'} forecast. Was there an issue today?</p>
+                         </div>
+                         <div className="flex flex-col gap-2">
+                           <button onClick={() => excludeDay(todayForecast.isoDate)} className="w-full py-2 bg-amber-500 text-black text-[10px] font-black uppercase rounded-lg shadow-lg active:scale-[0.98]">Exclude from Calibration</button>
+                           <button onClick={() => acknowledgeOutlier(todayForecast.isoDate)} className="w-full py-1 text-[9px] text-slate-500 font-bold uppercase hover:text-slate-300 transition-colors">Include anyway</button>
+                         </div>
+                       </div>
+                     );
+                   }
+                   return null;
+                })()}
+                <p className="mt-4 text-[10px] text-slate-500 italic leading-tight">Syncs to cloud for model tuning.</p></div>
               <div className={`p-5 rounded-xl border shadow-sm flex flex-col justify-between ${daysEntered > 0 ? (isAccurate ? 'bg-emerald-900/10 border-emerald-500/20' : 'bg-amber-900/10 border-amber-500/20') : 'bg-[#252630] border-slate-700/50'}`}><div><p className="text-slate-400 text-sm font-medium mb-1 flex items-center gap-2"><Target className="w-4 h-4" /> Calibration</p>{daysEntered > 0 ? (<div className="space-y-1 mt-2"><div className="flex items-end gap-2"><h2 className={`text-3xl font-bold ${isAccurate ? 'text-emerald-400' : 'text-amber-400'}`}>{accuracyPercentage}%</h2><span className="text-[10px] text-slate-500 mb-1 uppercase tracking-tighter text-xs font-black">Accuracy</span></div><p className="text-[10px] text-slate-500 font-medium uppercase">Delta: <span className={sumActuals > sumModel ? "text-emerald-500" : "text-amber-500"}>{sumActuals > sumModel ? "+" : ""}{(sumActuals - sumModel).toFixed(2)} kWh</span></p></div>) : <p className="text-slate-500 text-xs mt-3 italic leading-tight">Add past data in history tab to tune model accuracy.</p>}</div>{canApply && <button onClick={() => { saveConfigToCloud({ ...config, eff: suggestedEff }); logAnalyticsEvent('config_change', { type: 'apply_calibration' }); }} className="mt-3 w-full py-2 text-[10px] font-black rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 tracking-widest hover:bg-amber-500/30 transition-all uppercase">Apply Calibration</button>}</div>
               <div className="hidden md:flex bg-[#252630] p-5 rounded-xl border border-slate-700/50 shadow-sm flex-col justify-between"><div><p className="text-slate-400 text-sm font-medium mb-1">Forecast Tomorrow</p><div className="flex items-end gap-2"><h2 className="text-3xl font-bold text-white">{tomorrowForecast.yield.toFixed(1)}</h2><span className="text-slate-500 mb-1 font-medium text-xs">kWh</span></div></div><div className="mt-4 flex items-center gap-2 text-[10px] text-blue-500 font-bold uppercase tracking-widest"><Calendar className="w-3 h-3" /> 24h Prediction</div></div>
             </div>
