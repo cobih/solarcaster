@@ -194,6 +194,7 @@ export const useSolarPhysics = (config, dbSyncing) => {
           processedData.push({
             date, 
             dayLabel, 
+            isoDate,
             timeLabel: localTimeLabel, 
             fullLabel,
             total: Number(totalP50.toFixed(2)),
@@ -238,7 +239,8 @@ export const useSolarPhysics = (config, dbSyncing) => {
   // --- CALCULATE VITALS ---
   const now = new Date();
   
-  const todayHourly = data.filter(d => d.dayLabel === now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }));
+  const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const todayHourly = data.filter(d => d.isoDate === todayISO);
   const currentHourData = todayHourly.find(d => {
     const dHour = d.date.getHours();
     return dHour === now.getHours();
