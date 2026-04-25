@@ -47,6 +47,7 @@ export default function App() {
   const [feedbackText, setFeedbackText] = useState("");
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
   const [showForecastChart, setShowForecastChart] = useState(false);
+  const [showEconomics, setShowEconomics] = useState(false);
   const [selectedDayLabel, setSelectedDayLabel] = useState("");
   const [expandedForecastDay, setExpandedForecastDay] = useState(null);
   const [activeTab, setActiveTab] = useState("today");
@@ -108,8 +109,11 @@ export default function App() {
     } catch (err) { console.error(err); }
   };
 
-  const todayForecast = dailyTotals.find(d => d.dayOffset === 0) || { yield: 0, eastYield: 0, westYield: 0, dayLabel: '', strings: {} };
-  const tomorrowForecast = dailyTotals.find(d => d.dayOffset === 1) || { yield: 0, eastYield: 0, westYield: 0 };
+  const todayForecast = dailyTotals.find(d => d.dayOffset === 0) || { yield: 0, eastYield: 0, westYield: 0, dayLabel: '', isoDate: '', strings: {}, economics: { selfConsumed: 0, exported: 0, imported: 0, clipped: 0 } };
+  const tomorrowForecast = dailyTotals.find(d => d.dayOffset === 1) || { yield: 0, eastYield: 0, westYield: 0, economics: { selfConsumed: 0, exported: 0 } };
+
+  const todaySavings = (todayForecast.economics?.selfConsumed * config.importRate) + (todayForecast.economics?.exported * config.exportRate);
+  const tomorrowSavings = (tomorrowForecast.economics?.selfConsumed * config.importRate) + (tomorrowForecast.economics?.exported * config.exportRate);
 
   let sumActuals = 0;
   let sumModel = 0;
@@ -409,6 +413,48 @@ export default function App() {
             </div>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-700 pb-4 gap-4"><h3 className="font-semibold text-white text-sm flex items-center gap-2"><Calculator className="w-4 h-4 text-amber-400" /> String Configuration</h3><div className="flex items-center gap-4 w-full md:w-auto"><div className="flex flex-1 items-center gap-3 bg-[#1a1b23] p-2 rounded-xl border border-slate-800"><label className="text-[9px] font-black text-slate-500 uppercase">Efficiency</label><input type="range" min="10" max="100" value={config.eff * 100} onChange={e => saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 })} className="flex-1 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500" /><div className="flex items-center gap-1 min-w-[45px]"><input type="number" value={Math.round(config.eff * 100)} onChange={e => saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 })} className="w-8 bg-transparent text-indigo-400 text-xs font-bold font-mono outline-none" /><span className="text-[10px] text-slate-600">%</span></div></div><button onClick={addString} className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/20"><Plus className="w-4 h-4" /> Add String</button></div></div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{(config.strings || []).map(s => (<div key={s.id} className="p-4 bg-[#1a1b23] rounded-2xl border border-slate-700 relative group animate-in slide-in-from-bottom-2"><div className="flex justify-between items-center mb-3"><input type="text" value={s.name} onChange={e => updateString(s.id, 'name', e.target.value)} className="bg-transparent border-b border-slate-800 focus:border-indigo-500 outline-none text-white font-bold text-sm py-1" /><button onClick={() => removeString(s.id)} className="p-2 bg-red-900/10 hover:bg-red-900/30 text-red-500 rounded-lg flex items-center gap-1 transition-colors border border-red-500/10"><Trash2 className="w-3 h-3" /><span className="text-[8px] font-black uppercase">Remove</span></button></div><div className="grid grid-cols-2 gap-3"><div><label className="text-[9px] font-bold text-slate-500 uppercase mb-1">Panels</label><input type="number" value={s.count} onChange={e => updateString(s.id, 'count', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white" /></div><div><label className="text-[9px] font-bold text-slate-500 uppercase mb-1">Wattage</label><input type="number" value={s.wattage || 465} onChange={e => updateString(s.id, 'wattage', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white" /></div><div><label className="text-[9px] font-bold text-slate-500 uppercase mb-1">Azimuth</label><input type="number" value={s.azimuth} onChange={e => updateString(s.id, 'azimuth', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white" /></div><div><label className="text-[9px] font-bold text-slate-500 uppercase mb-1">Pitch / Tilt</label><input type="number" value={s.tilt} onChange={e => updateString(s.id, 'tilt', Number(e.target.value))} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white" /></div></div></div>))}</div>
+            {/* FINANCIALS & STORAGE */}
+            <div className="bg-[#1a1b23] p-5 rounded-2xl border border-slate-800 space-y-6">
+              <h3 className="font-semibold text-white text-sm flex items-center gap-2 border-b border-slate-800 pb-2"><Zap className="w-4 h-4 text-emerald-400" /> Financials & Storage</h3>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">Daily Load (kWh) <Info className="w-2.5 h-2.5" title="Your average daily electricity usage" /></label>
+                  <input type="number" value={config.dailyConsumption} onChange={e => saveConfigToCloud({ ...config, dailyConsumption: Number(e.target.value) })} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">Battery (kWh) <Info className="w-2.5 h-2.5" title="Total usable battery storage" /></label>
+                  <input type="number" value={config.batteryCapacity} onChange={e => saveConfigToCloud({ ...config, batteryCapacity: Number(e.target.value) })} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">Inverter AC Limit (kW) {config.batteryCapacity > 0 && <span className="text-indigo-400 normal-case ml-2">(Hybrid mode: Unlimited DC flow)</span>}</label>
+                  <div className="relative">
+                    <input 
+                      type="number" 
+                      disabled={config.batteryCapacity > 0}
+                      value={config.inverterACRating || ''} 
+                      onChange={e => saveConfigToCloud({ ...config, inverterACRating: e.target.value ? Number(e.target.value) : null })} 
+                      placeholder={config.batteryCapacity > 0 ? "N/A (Hybrid)" : "e.g. 3.6 or 5.0"}
+                      className="w-full bg-[#252630] border border-slate-700 rounded-lg px-3 py-2 text-sm text-white disabled:opacity-50" 
+                    />
+                    {!config.batteryCapacity && <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[8px] text-slate-600 font-bold uppercase">Clipping</div>}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4 pt-2">
+                <div className="flex justify-between items-center bg-[#252630] p-3 rounded-xl border border-slate-700">
+                  <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">On Microgen Scheme?</span>
+                  <button onClick={() => saveConfigToCloud({ ...config, onMicrogenScheme: !config.onMicrogenScheme })} className={`px-4 py-1 rounded-full text-[9px] font-black uppercase transition-all ${config.onMicrogenScheme ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500'}`}>{config.onMicrogenScheme ? "Yes" : "No"}</button>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                   <div><label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Import Rate (€)</label><input type="number" step="0.01" value={config.importRate} onChange={e => saveConfigToCloud({ ...config, importRate: Number(e.target.value) })} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" /></div>
+                   <div><label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Export Rate (€)</label><input type="number" step="0.01" value={config.exportRate} onChange={e => saveConfigToCloud({ ...config, exportRate: Number(e.target.value) })} className="w-full bg-[#252630] border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" /></div>
+                </div>
+              </div>
+            </div>
+
             <div className="pt-4 border-t border-slate-700/50 flex flex-col gap-4"><div className="flex justify-between items-center text-xs text-slate-400"><p>System Capacity: <strong className="text-white text-sm">{totalCapacity.toFixed(2)} kWp</strong></p><button onClick={handleLogout} className="text-red-400 hover:underline md:hidden text-xs font-bold uppercase tracking-widest">Log Out</button></div>              <div className="bg-[#1a1b23] p-4 rounded-2xl border border-slate-800 space-y-3">
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-2 text-indigo-400 font-black text-[10px] uppercase tracking-widest"><Zap className="w-3 h-3" /> External API (Smart Home)</div>
@@ -494,6 +540,75 @@ export default function App() {
               <div className={`p-5 rounded-xl border shadow-sm flex flex-col justify-between ${daysEntered > 0 ? (isAccurate ? 'bg-emerald-900/10 border-emerald-500/20' : 'bg-amber-900/10 border-amber-500/20') : 'bg-[#252630] border-slate-700/50'}`}><div><p className="text-slate-400 text-sm font-medium mb-1 flex items-center gap-2"><Target className="w-4 h-4" /> Calibration</p>{daysEntered > 0 ? (<div className="space-y-1 mt-2"><div className="flex items-end gap-2"><h2 className={`text-3xl font-bold ${isAccurate ? 'text-emerald-400' : 'text-amber-400'}`}>{accuracyPercentage}%</h2><span className="text-[10px] text-slate-500 mb-1 uppercase tracking-tighter text-xs font-black">Accuracy</span></div><p className="text-[10px] text-slate-500 font-medium uppercase">Delta: <span className={sumActuals > sumModel ? "text-emerald-500" : "text-amber-500"}>{sumActuals > sumModel ? "+" : ""}{(sumActuals - sumModel).toFixed(2)} kWh</span></p></div>) : <p className="text-slate-500 text-xs mt-3 italic leading-tight">Add past data in history tab to tune model accuracy.</p>}</div>{canApply && <button onClick={() => { saveConfigToCloud({ ...config, eff: suggestedEff }); logAnalyticsEvent('config_change', { type: 'apply_calibration' }); }} className="mt-3 w-full py-2 text-[10px] font-black rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 tracking-widest hover:bg-amber-500/30 transition-all uppercase">Apply Calibration</button>}</div>
               <div className="hidden md:flex bg-[#252630] p-5 rounded-xl border border-slate-700/50 shadow-sm flex-col justify-between"><div><p className="text-slate-400 text-sm font-medium mb-1">Forecast Tomorrow</p><div className="flex items-end gap-2"><h2 className="text-3xl font-bold text-white">{tomorrowForecast.yield.toFixed(1)}</h2><span className="text-slate-500 mb-1 font-medium text-xs">kWh</span></div></div><div className="mt-4 flex items-center gap-2 text-[10px] text-blue-500 font-bold uppercase tracking-widest"><Calendar className="w-3 h-3" /> 24h Prediction</div></div>
             </div>
+
+            {/* ESTIMATED ECONOMICS CARD */}
+            <div className="bg-[#252630] rounded-2xl border border-slate-700/50 shadow-lg overflow-hidden">
+               <button onClick={() => setShowEconomics(!showEconomics)} className="w-full p-5 flex items-center justify-between hover:bg-[#2d2e3a] transition-colors">
+                  <div className="flex items-center gap-4 text-left">
+                     <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 text-emerald-400"><TrendingUp className="w-6 h-6" /></div>
+                     <div>
+                        <h3 className="text-sm font-black text-white uppercase tracking-widest">Estimated Economics</h3>
+                        <p className="text-[10px] text-slate-500 font-medium">Tomorrow's solar could save you an estimated <strong className="text-emerald-400">€{tomorrowSavings.toFixed(2)}</strong></p>
+                     </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                     <div className="text-right hidden sm:block"><div className="text-[9px] text-slate-500 uppercase font-black">Estimated Savings Today</div><div className="text-xl font-black text-white">€{todaySavings.toFixed(2)}</div></div>
+                     {showEconomics ? <ChevronUp className="w-5 h-5 text-slate-600" /> : <ChevronDown className="w-5 h-5 text-slate-600" />}
+                  </div>
+               </button>
+               
+               {showEconomics && (
+                  <div className="px-5 pb-6 space-y-6 animate-in slide-in-from-top-2 duration-300">
+                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="p-4 bg-[#1a1b23] rounded-xl border border-slate-800 flex flex-col justify-between">
+                           <div>
+                              <div className="flex justify-between items-start mb-2"><span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Self-Consumed</span><Zap className="w-3 h-3 text-emerald-400" /></div>
+                              <div className="text-xl font-bold text-white">{todayForecast.economics?.selfConsumed.toFixed(1)} <span className="text-xs text-slate-500 font-normal uppercase">kWh</span></div>
+                           </div>
+                           <div className="mt-4 pt-3 border-t border-slate-800/50 text-[10px] text-emerald-400 font-bold">Saved ~€{(todayForecast.economics?.selfConsumed * config.importRate).toFixed(2)} vs grid import</div>
+                        </div>
+
+                        <div className="p-4 bg-[#1a1b23] rounded-xl border border-slate-800 flex flex-col justify-between">
+                           <div>
+                              <div className="flex justify-between items-start mb-2"><span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Exported</span><Navigation className="w-3 h-3 text-indigo-400" /></div>
+                              <div className="text-xl font-bold text-white">{todayForecast.economics?.exported.toFixed(1)} <span className="text-xs text-slate-500 font-normal uppercase">kWh</span></div>
+                           </div>
+                           <div className="mt-4 pt-3 border-t border-slate-800/50">
+                              {config.onMicrogenScheme ? (
+                                <span className="text-[10px] text-indigo-400 font-bold">Est. €{(todayForecast.economics?.exported * config.exportRate).toFixed(2)} credit today</span>
+                              ) : (
+                                <div className="space-y-1">
+                                  <div className="text-[9px] text-amber-500 font-bold uppercase tracking-tighter">Microgen scheme nudge</div>
+                                  <a href="https://www.seai.ie/grants/solar-pv-grants/microgeneration-scheme/" target="_blank" rel="noopener noreferrer" className="text-[10px] text-slate-500 hover:text-indigo-400 underline leading-tight block">Join scheme to earn ~€{(todayForecast.economics?.exported * config.exportRate).toFixed(2)} today</a>
+                                </div>
+                              )}
+                           </div>
+                        </div>
+
+                        <div className="p-4 bg-[#1a1b23] rounded-xl border border-slate-800 flex flex-col justify-between">
+                           <div>
+                              <div className="flex justify-between items-start mb-2"><span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Grid Import Needed</span><CloudRain className="w-3 h-3 text-red-400" /></div>
+                              <div className="text-xl font-bold text-white">{todayForecast.economics?.imported.toFixed(1)} <span className="text-xs text-slate-500 font-normal uppercase">kWh</span></div>
+                           </div>
+                           <div className="mt-4 pt-3 border-t border-slate-800/50 text-[10px] text-slate-500 font-medium">Estimated cost: €{(todayForecast.economics?.imported * config.importRate).toFixed(2)}</div>
+                        </div>
+                     </div>
+
+                     {todayForecast.economics?.clipped > 0 && config.inverterACRating && !config.batteryCapacity && (
+                       <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-4">
+                          <AlertCircle className="w-6 h-6 text-amber-500 shrink-0" />
+                          <p className="text-[10px] font-bold text-amber-200 leading-tight">Your inverter clipped an estimated <span className="text-white text-xs">{todayForecast.economics.clipped.toFixed(1)} kWh</span> today. A battery could recover this generation.</p>
+                       </div>
+                     )}
+
+                     <div className="flex items-center gap-2 text-[9px] text-slate-600 italic bg-black/20 p-2 rounded-lg border border-slate-800/50">
+                        <Info className="w-3 h-3 shrink-0" />
+                        <span>Based on flat consumption profile (daily average divided across 24 hours). Add a time-of-use profile in v2 for more accurate results.</span>
+                     </div>
+                  </div>
+               )}
+            </div>
+
             <div className="bg-[#252630] p-4 md:p-6 rounded-2xl border border-slate-700/50 shadow-lg">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6"><h2 className="text-lg font-semibold text-white flex items-center gap-2"><Activity className="w-5 h-5 text-indigo-400" /> Hourly Profile</h2><div className="flex flex-wrap gap-2">{['clouds', 'total', 'energy', 'strings', 'uncertainty'].map(k => (<button key={k} onClick={() => toggleSeries(k)} className={`px-2 py-1 rounded text-[9px] font-black uppercase border transition-all shadow-sm ${visibleSeries[k] ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-transparent border-slate-800 text-slate-600'}`}>{k}</button>))}</div></div>
               <div className="h-[250px] w-full"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={selectedDayData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" /><XAxis dataKey="timeLabel" interval={3} stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} /><YAxis stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} /><YAxis yAxisId="right" orientation="right" stroke="#818cf8" fontSize={10} axisLine={false} tickLine={false} unit="kWh" /><Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} content={({ active, payload, label }) => { if (active && payload && payload.length) return (<div className="bg-[#1e293b] border border-slate-700 p-3 rounded-lg shadow-xl text-[10px] space-y-1"><p className="font-bold text-slate-400 mb-1">{label}</p>{payload.map((e, idx) => (<div key={idx} className="flex justify-between gap-4"><span style={{ color: e.color }} className="font-bold">{e.name}:</span><span className="text-white font-mono">{e.value} {e.dataKey === 'cumulativeYield' ? 'kWh' : (e.dataKey === 'cloudCover' ? '%' : 'kW')}</span></div>))}</div>); return null; }} />{visibleSeries.uncertainty && <Area type="monotone" dataKey={['p10', 'p90']} stroke="none" fill="#fde047" fillOpacity={0.1} name="Uncertainty" />}{visibleSeries.clouds && <Area yAxisId="right" type="monotone" dataKey="cloudCover" name="Cloud %" stroke="none" fill="#475569" fillOpacity={0.1} />}{visibleSeries.total && <Area type="monotone" dataKey="total" name="Total Power" stroke="#fde047" fill="#fde047" fillOpacity={0.1} strokeWidth={2} />}{visibleSeries.strings && (config.strings || []).map((s, idx) => <Line key={s.id} type="monotone" dataKey={`stringPowers.${s.id}`} name={s.name} stroke={STRING_COLORS[idx % STRING_COLORS.length]} strokeWidth={1} dot={false} strokeDasharray="5 5" />)}{visibleSeries.energy && <Line yAxisId="right" type="monotone" dataKey="cumulativeYield" name="Energy" stroke="#818cf8" strokeWidth={3} dot={false} />}{currentHourTick && <ReferenceLine x={currentHourTick} stroke="#818cf8" strokeDasharray="4 4" />}</ComposedChart></ResponsiveContainer></div>

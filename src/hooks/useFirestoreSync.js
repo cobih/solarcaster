@@ -25,6 +25,12 @@ export const useFirestoreSync = (user, appId) => {
     apiEnabled: isDemo,
     excludedDays: [],
     acknowledgedOutliers: [],
+    dailyConsumption: 12,
+    batteryCapacity: 0,
+    inverterACRating: null,
+    onMicrogenScheme: false,
+    exportRate: 0.21,
+    importRate: 0.40,
   });
 
   const [actuals, setActuals] = useState(isDemo ? {
@@ -50,6 +56,12 @@ export const useFirestoreSync = (user, appId) => {
         if (data.apiEnabled === undefined) migrated.apiEnabled = false;
         if (!data.excludedDays) migrated.excludedDays = [];
         if (!data.acknowledgedOutliers) migrated.acknowledgedOutliers = [];
+        if (data.dailyConsumption === undefined) migrated.dailyConsumption = 12;
+        if (data.batteryCapacity === undefined) migrated.batteryCapacity = 0;
+        if (data.inverterACRating === undefined) migrated.inverterACRating = null;
+        if (data.onMicrogenScheme === undefined) migrated.onMicrogenScheme = false;
+        if (data.exportRate === undefined) migrated.exportRate = 0.21;
+        if (data.importRate === undefined) migrated.importRate = 0.40;
         if (data.strings && data.strings.length > 0) {
            migrated.arraysSet = true;
            migrated.strings = data.strings.map(s => ({ ...s, wattage: s.wattage || 465 }));

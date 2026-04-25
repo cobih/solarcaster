@@ -39,6 +39,12 @@ export const sanitizeConfig = (config) => {
     apiEnabled: !!config.apiEnabled,
     excludedDays: Array.isArray(config.excludedDays) ? config.excludedDays : [],
     acknowledgedOutliers: Array.isArray(config.acknowledgedOutliers) ? config.acknowledgedOutliers : [],
+    dailyConsumption: parseFloat(config.dailyConsumption) || 0,
+    batteryCapacity: parseFloat(config.batteryCapacity) || 0,
+    inverterACRating: config.inverterACRating === null ? null : (parseFloat(config.inverterACRating) || null),
+    onMicrogenScheme: !!config.onMicrogenScheme,
+    exportRate: parseFloat(config.exportRate) || 0,
+    importRate: parseFloat(config.importRate) || 0,
     schemaVersion: 2, // Force current schema
     strings: (config.strings || []).map(s => ({
       ...s,

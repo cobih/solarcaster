@@ -84,6 +84,9 @@ export const useSolarPhysics = (config, dbSyncing) => {
         let closestNowDiff = Infinity;
         let currentNowLabel = "";
 
+        let currentBatterySoC = 0;
+        let lastISO = null;
+
         for (let i = 0; i < hourly.time.length; i++) {
           const timeStr = hourly.time[i];
           const date = new Date(timeStr + "Z");
@@ -137,9 +140,56 @@ export const useSolarPhysics = (config, dbSyncing) => {
           // Robust Local ISO Key (YYYY-MM-DD)
           const isoDate = `${itemMidnight.getFullYear()}-${String(itemMidnight.getMonth() + 1).padStart(2, '0')}-${String(itemMidnight.getDate()).padStart(2, '0')}`;
           
-          if (!totalsByDay[dayLabel]) {
-            totalsByDay[dayLabel] = { date: itemMidnight, dayLabel, isoDate, dayOffset, yield: 0, strings: {} };
+          if (isoDate !== lastISO) {
+             currentBatterySoC = 0; // Reset battery at start of day
+             lastISO = isoDate;
           }
+
+          if (!totalsByDay[dayLabel]) {
+            totalsByDay[dayLabel] = { 
+              date: itemMidnight, 
+              dayLabel, 
+              isoDate, 
+              dayOffset, 
+              yield: 0, 
+              strings: {},
+              economics: { selfConsumed: 0, exported: 0, imported: 0, clipped: 0 }
+            };
+          }
+
+          // --- ECONOMICS LOGIC (PER HOUR) ---
+          let generation = totalP50;
+          let clipped = 0;
+
+          // Clipping Rule: String inverter with no battery
+          if (config.inverterACRating && !config.batteryCapacity) {
+             clipped = Math.max(0, generation - config.inverterACRating);
+             generation = Math.min(generation, config.inverterACRating);
+          }
+
+          const consumption = (config.dailyConsumption || 0) / 24;
+          let selfConsumed = 0;
+          let exported = 0;
+          let imported = 0;
+          const net = generation - consumption;
+
+          if (net > 0) {
+             selfConsumed = consumption;
+             const charge = Math.min(net, (config.batteryCapacity || 0) - currentBatterySoC);
+             currentBatterySoC += charge;
+             exported = net - charge;
+          } else {
+             selfConsumed = generation;
+             const deficit = Math.abs(net);
+             const discharge = Math.min(deficit, currentBatterySoC);
+             currentBatterySoC -= discharge;
+             imported = deficit - discharge;
+          }
+
+          totalsByDay[dayLabel].economics.selfConsumed += selfConsumed;
+          totalsByDay[dayLabel].economics.exported += exported;
+          totalsByDay[dayLabel].economics.imported += imported;
+          totalsByDay[dayLabel].economics.clipped += clipped;
           
           processedData.push({
             date, 
@@ -153,6 +203,7 @@ export const useSolarPhysics = (config, dbSyncing) => {
             stringPowers,
             cloudCover: clouds,
             cumulativeYield: Number(totalsByDay[dayLabel].yield.toFixed(2)),
+            batterySoC: currentBatterySoC
           });
 
           totalsByDay[dayLabel].yield += totalP50;
