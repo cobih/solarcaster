@@ -195,6 +195,7 @@ export const useSolarPhysics = (config, dbSyncing) => {
             p10: Number(totalP10.toFixed(2)),
             p50: Number(totalP50.toFixed(2)),
             p90: Number(totalP90.toFixed(2)),
+            pRange: [Number(totalP10.toFixed(2)), Number(totalP90.toFixed(2))],
             stringPowers,
             cloudCover: clouds,
             cumulativeYield: Number(totalsByDay[dayLabel].yield.toFixed(2)),
