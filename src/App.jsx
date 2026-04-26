@@ -71,7 +71,7 @@ export default function App() {
   }, []);
 
   const chartMargins = isMobile 
-    ? { top: 25, right: 10, left: 10, bottom: 0 } 
+    ? { top: 25, right: 0, left: 0, bottom: 0 } 
     : { top: 10, right: 40, left: 40, bottom: 0 };
 
   useEffect(() => {
