@@ -375,7 +375,22 @@ export default function App() {
     }
   };
 
-  if (authLoading) return <div className="flex items-center justify-center h-screen bg-solar-bg text-white"><MapPin className="w-12 h-12 text-indigo-500 animate-pulse" /></div>;
+  if (authLoading) return (
+    <div className="flex flex-col items-center justify-center h-screen bg-solar-bg text-white gap-4 p-6 text-center">
+      <MapPin className="w-12 h-12 text-indigo-500 animate-pulse" />
+      {authError ? (
+        <div className="max-w-xs space-y-4 animate-in fade-in zoom-in-95">
+          <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            <p>{authError}</p>
+          </div>
+          <button onClick={handleDemo} className="w-full py-3 bg-solar-card border border-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-all active:scale-95">Continue as Guest</button>
+        </div>
+      ) : (
+        <p className="text-slate-500 text-[10px] uppercase tracking-widest font-black animate-pulse">Initializing Secure Session...</p>
+      )}
+    </div>
+  );
   if (!user && !isDemo) return (
     <div className="flex items-center justify-center min-h-screen bg-solar-bg p-6 text-center">
       <div className="max-w-md w-full bg-solar-card p-8 rounded-2xl border border-slate-700 shadow-2xl space-y-6">

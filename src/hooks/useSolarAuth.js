@@ -22,7 +22,9 @@ export const useSolarAuth = () => {
           setUser(result.user);
         }
       } catch (err) {
-        setAuthError(err.code + ": " + err.message);
+        console.error("Redirect Auth Error:", err);
+        setAuthError(`Authentication failed: ${err.message || "Custom domain not authorized"}. Please check Firebase/Google Console settings.`);
+        setAuthLoading(false);
       }
     };
 
