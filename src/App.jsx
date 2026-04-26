@@ -52,7 +52,6 @@ export default function App() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [locationMode, setLocationMode] = useState("gps");
   const [manualCoords, setManualCoords] = useState({ lat: 53.3767, long: -6.3286 });
-  const [mapboxSession, setMapboxSession] = useState("");
 
   const [visibleSeries, setVisibleSeries] = useState({
     total: true, energy: true, clouds: true, strings: true, uncertainty: true
@@ -176,40 +175,21 @@ export default function App() {
     return map[country] || '€';
   };
 
-  const generateUUID = () => {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    });
-  };
-
-  const startSearchSession = () => {
-    if (!mapboxSession) setMapboxSession(generateUUID());
-  };
-
   const searchAddress = async (q) => {
     setAddressQuery(q);
     if (q.length < 2) { setSearchResults([]); return; }
-    
+
     if (searchTimeout) clearTimeout(searchTimeout);
     searchTimeout = setTimeout(async () => {
-      let token = mapboxSession;
-      if (!token) {
-        token = generateUUID();
-        setMapboxSession(token);
-      }
-
       setSearchLoading(true);
       try {
         const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN || MBT;
-        const res = await fetch(`https://api.mapbox.com/search/searchbox/v1/suggest?q=${encodeURIComponent(q)}&access_token=${mapboxToken}&session_token=${token}&types=place,region,postcode,address&limit=5`);
+        const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?access_token=${mapboxToken}&limit=5&proximity=ip&types=place,postcode,address`);
         const data = await res.json();
-        setSearchResults(data.suggestions || []);
+        setSearchResults(data.features || []);
       } catch (err) { console.error(err); } finally { setSearchLoading(false); }
     }, 300);
   };
-
   const detectLocation = () => {
     if (!navigator.geolocation) return alert("No GPS");
     setSearchLoading(true);
@@ -226,27 +206,22 @@ export default function App() {
   };
 
   const selectLocation = async (res) => {
-    if (res.mapbox_id) {
-       setSearchLoading(true);
-       try {
-         const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN || MBT;
-         const retrieveRes = await fetch(`https://api.mapbox.com/search/searchbox/v1/retrieve/${res.mapbox_id}?access_token=${mapboxToken}&session_token=${mapboxSession}`);
-         const data = await retrieveRes.json();
-         const feature = data.features[0];
-         const [lng, lat] = feature.geometry.coordinates;
-         const country = feature.properties.context?.country?.name || "Ireland";
-         const c = getCurrencyForCountry(country);
-         saveConfigToCloud({ 
-            ...config, 
-            lat, 
-            long: lng, 
-            locationName: res.name + (res.place_formatted ? ', ' + res.place_formatted : ''), 
-            locationSet: true, 
-            currency: c 
-         });
-         setMapboxSession(""); 
-       } catch (err) { console.error(err); } finally { setSearchLoading(false); }
+    // Mapbox feature detection
+    if (res.geometry && res.place_name) {
+       const [lng, lat] = res.geometry.coordinates;
+       const countryContext = res.context?.find(c => c.id.startsWith('country'))?.text || "Ireland";
+       const c = getCurrencyForCountry(countryContext);
+       
+       saveConfigToCloud({ 
+          ...config, 
+          lat, 
+          long: lng, 
+          locationName: res.place_name, 
+          locationSet: true, 
+          currency: c 
+       });
     } else {
+       // Manual coordinates fallback
        const c = getCurrencyForCountry(res.country);
        saveConfigToCloud({ ...config, lat: res.latitude, long: res.longitude, locationName: res.name + (res.admin1 ? ', ' + res.admin1 : ''), locationSet: true, currency: c });
     }
@@ -343,9 +318,9 @@ export default function App() {
                   {searchResults.length > 0 && (
                     <div className="absolute left-0 right-0 z-[1000] mt-2 bg-[#1a1b23] border border-slate-700 rounded-2xl overflow-y-auto max-h-[250px] shadow-[0_20px_50px_rgba(0,0,0,0.5)] custom-scrollbar">
                       {searchResults.map(r => (
-                        <button key={r.mapbox_id} onClick={() => selectLocation(r)} className="w-full px-5 py-4 text-left hover:bg-indigo-600/20 border-b border-slate-800 last:border-0 flex flex-col gap-0.5 transition-colors">
-                          <div className="font-bold text-white text-sm">{r.name}</div>
-                          <div className="text-[10px] text-slate-500 font-medium line-clamp-1">{r.place_formatted}</div>
+                        <button key={r.id} onClick={() => selectLocation(r)} className="w-full px-5 py-4 text-left hover:bg-indigo-600/20 border-b border-slate-800 last:border-0 flex flex-col gap-0.5 transition-colors">
+                          <div className="font-bold text-white text-sm">{r.text}</div>
+                          <div className="text-[10px] text-slate-500 font-medium line-clamp-1">{r.place_name}</div>
                         </button>
                       ))}
                     </div>
@@ -422,9 +397,9 @@ export default function App() {
                       {searchResults.length > 0 && (
                         <div className="absolute left-0 right-0 z-[1000] mt-2 bg-[#1a1b23] border border-slate-700 rounded-xl shadow-2xl overflow-y-auto max-h-[250px] custom-scrollbar">
                           {searchResults.map(r => (
-                            <button key={r.mapbox_id} onClick={() => selectLocation(r)} className="w-full px-4 py-3 text-left hover:bg-indigo-600/20 border-b border-slate-800 last:border-0 flex flex-col gap-0.5 transition-colors">
-                              <div className="font-bold text-sm text-slate-200">{r.name}</div>
-                              <div className="text-[10px] text-slate-500 line-clamp-1">{r.place_formatted}</div>
+                            <button key={r.id} onClick={() => selectLocation(r)} className="w-full px-4 py-3 text-left hover:bg-indigo-600/20 border-b border-slate-800 last:border-0 flex flex-col gap-0.5 transition-colors">
+                              <div className="font-bold text-sm text-slate-200">{r.text}</div>
+                              <div className="text-[10px] text-slate-500 line-clamp-1">{r.place_name}</div>
                             </button>
                           ))}
                         </div>
