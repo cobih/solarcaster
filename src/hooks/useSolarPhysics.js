@@ -146,11 +146,12 @@ export const useSolarPhysics = (config, dbSyncing) => {
               isoDate, 
               dayOffset, 
               yield: 0, 
+              p10: 0,
+              p90: 0,
               strings: {},
               economics: { selfConsumed: 0, exported: 0, imported: 0, clipped: 0 }
             };
           }
-
           // --- ECONOMICS LOGIC (PER HOUR) ---
           let generation = totalP50;
           let clipped = 0;
@@ -203,7 +204,8 @@ export const useSolarPhysics = (config, dbSyncing) => {
           });
 
           totalsByDay[dayLabel].yield += totalP50;
-          // Accumulate per-string daily yield
+          totalsByDay[dayLabel].p10 += totalP10;
+          totalsByDay[dayLabel].p90 += totalP90;          // Accumulate per-string daily yield
           Object.keys(stringPowers).forEach(id => {
             totalsByDay[dayLabel].strings[id] = (totalsByDay[dayLabel].strings[id] || 0) + stringPowers[id];
           });
