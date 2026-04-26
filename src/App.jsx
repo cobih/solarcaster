@@ -501,34 +501,49 @@ export default function App() {
         </div>
 
         {showSwitcher && (
-          <div className="bg-solar-card border border-slate-700 rounded-2xl shadow-xl animate-in fade-in slide-in-from-top-2 overflow-hidden w-full md:w-96">
-            <div className="p-3 border-b border-slate-800 bg-solar-bg">
-              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">My Properties</p>
-            </div>
-            <div className="max-h-64 overflow-y-auto custom-scrollbar">
-              {systems.map(s => (
+          <div className="bg-solar-card border border-slate-700 rounded-2xl shadow-xl animate-in fade-in slide-in-from-top-2 overflow-hidden w-full md:w-96 relative">
+            <div className={`transition-all duration-500 ${isDemo ? 'blur-md select-none pointer-events-none' : ''}`}>
+              <div className="p-3 border-b border-slate-800 bg-solar-bg">
+                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">My Properties</p>
+              </div>
+              <div className="max-h-64 overflow-y-auto custom-scrollbar">
+                {systems.map(s => (
+                  <button 
+                    key={s.id} 
+                    onClick={() => { setCurrentSystemId(s.id); setShowSwitcher(false); }}
+                    className={`w-full p-4 text-left hover:bg-indigo-600/10 flex items-center gap-3 transition-colors border-b border-slate-800/50 last:border-0 ${currentSystemId === s.id ? 'bg-indigo-600/5 border-l-2 border-l-indigo-500' : ''}`}
+                  >
+                    <Home className={`w-4 h-4 ${currentSystemId === s.id ? 'text-indigo-400' : 'text-slate-600'}`} />
+                    <div className="min-w-0 flex-1">
+                      <p className={`text-sm font-bold truncate ${currentSystemId === s.id ? 'text-white' : 'text-slate-400'}`}>{s.locationName}</p>
+                      {s.id === 'demo' && <p className="text-[8px] text-amber-500 font-bold uppercase">Guest Mode</p>}
+                    </div>
+                    {currentSystemId === s.id && <Activity className="w-3 h-3 text-indigo-500 animate-pulse" />}
+                  </button>
+                ))}
+              </div>
+              {!isDemo && (
                 <button 
-                  key={s.id} 
-                  onClick={() => { setCurrentSystemId(s.id); setShowSwitcher(false); }}
-                  className={`w-full p-4 text-left hover:bg-indigo-600/10 flex items-center gap-3 transition-colors border-b border-slate-800/50 last:border-0 ${currentSystemId === s.id ? 'bg-indigo-600/5 border-l-2 border-l-indigo-500' : ''}`}
+                  onClick={handleAddSystem}
+                  className="w-full p-4 text-left hover:bg-emerald-600/10 flex items-center gap-3 text-emerald-400 transition-colors border-t border-slate-800 bg-solar-bg"
                 >
-                  <Home className={`w-4 h-4 ${currentSystemId === s.id ? 'text-indigo-400' : 'text-slate-600'}`} />
-                  <div className="min-w-0 flex-1">
-                    <p className={`text-sm font-bold truncate ${currentSystemId === s.id ? 'text-white' : 'text-slate-400'}`}>{s.locationName}</p>
-                    {s.id === 'demo' && <p className="text-[8px] text-amber-500 font-bold uppercase">Guest Mode</p>}
-                  </div>
-                  {currentSystemId === s.id && <Activity className="w-3 h-3 text-indigo-500 animate-pulse" />}
+                  <Plus className="w-4 h-4" />
+                  <span className="text-xs font-black uppercase tracking-widest">Add New Property</span>
                 </button>
-              ))}
+              )}
             </div>
-            {!isDemo && (
-              <button 
-                onClick={handleAddSystem}
-                className="w-full p-4 text-left hover:bg-emerald-600/10 flex items-center gap-3 text-emerald-400 transition-colors border-t border-slate-800 bg-solar-bg"
+
+            {isDemo && (
+              <div 
+                onClick={() => setIsDemo(false)}
+                className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-solar-bg/40 backdrop-blur-[2px] cursor-pointer group"
               >
-                <Plus className="w-4 h-4" />
-                <span className="text-xs font-black uppercase tracking-widest">Add New Property</span>
-              </button>
+                <Lock className="w-5 h-5 text-indigo-400 group-hover:scale-110 transition-transform" />
+                <div className="text-center">
+                  <p className="text-[10px] font-black text-white uppercase tracking-widest">Portfolio Manager</p>
+                  <p className="text-[9px] text-slate-400 leading-tight">Sign in to manage<br/>multiple properties</p>
+                </div>
+              </div>
             )}
           </div>
         )}
