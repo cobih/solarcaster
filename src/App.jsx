@@ -133,6 +133,10 @@ export default function App() {
   });
 
   const accuracyPercentage = sumActuals > 0 ? ((sumModel / sumActuals) * 100).toFixed(1) : 0;
+  const avgError = statsList.length > 0 ? (statsList.reduce((acc, curr) => acc + curr.absDelta, 0) / statsList.length * 100).toFixed(1) : "0.0";
+  const sortedStats = [...statsList].sort((a, b) => a.absDelta - b.absDelta);
+  const bestDay = sortedStats[0] || null;
+  const worstDay = sortedStats[sortedStats.length - 1] || null;
 
   const isAccurate = Math.abs(100 - Number(accuracyPercentage)) < 5;
   let suggestedEff = config.eff;
@@ -141,6 +145,21 @@ export default function App() {
   }
   const canApply = daysEntered > 0 && Math.abs(config.eff - suggestedEff) > 0.001;
 
+  const accuracyChartData = dailyTotals
+    .filter(day => day.dayOffset < 0 || actuals[day.isoDate])
+    .slice(-30)
+    .map((day, idx, arr) => {
+      const actual = Number(actuals[day.isoDate]) || 0;
+      const model = Number(snapshots[day.isoDate] || day.yield);
+      const isExcluded = (config.excludedDays || []).includes(day.isoDate);
+      const deltaPct = model > 0 ? ((actual - model) / model * 100) : 0;
+      let rollingSum = 0, rollingCount = 0;
+      for (let i = Math.max(0, idx - 6); i <= idx; i++) {
+         const d = arr[i], a = Number(actuals[d.isoDate]) || 0, m = Number(snapshots[d.isoDate] || d.yield);
+         if (a > 0 && !(config.excludedDays || []).includes(d.isoDate)) { rollingSum += Math.abs((a - m) / m * 100); rollingCount++; }
+      }
+      return { label: day.date.toLocaleDateString([], { month: 'short', day: 'numeric' }), actual: isExcluded ? 0 : actual, model: isExcluded ? 0 : model, excludedActual: isExcluded ? actual : 0, excludedModel: isExcluded ? model : 0, rollingAvg: rollingCount > 0 ? (rollingSum / rollingCount) : null, isOutlier: Math.abs(deltaPct) > 25, isoDate: day.isoDate };
+    });
   useEffect(() => {
     if (!selectedDayLabel && dailyTotals.length > 0) {
       const today = dailyTotals.find(d => d.dayOffset === 0);
@@ -410,7 +429,69 @@ export default function App() {
 
         {activeTab === 'history' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 pb-8">
-            {config.effHistory?.length > 1 && (<div className="bg-[#252630] p-6 rounded-2xl border border-slate-700/50 shadow-lg"><div className="flex justify-between items-center mb-6"><h2 className="text-lg font-black text-white flex items-center gap-2 uppercase tracking-tighter"><TrendingUp className="w-5 h-5 text-emerald-400" />Efficiency Trend</h2><div className="text-[10px] text-slate-500 font-mono font-bold uppercase">Last 50 Updates</div></div><div className="h-[150px] w-full"><ResponsiveContainer width="100%" height="100%"><AreaChart data={[...config.effHistory].reverse()}><defs><linearGradient id="colorEff" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" /><XAxis dataKey="label" stroke="#475569" fontSize={10} axisLine={false} tickLine={false} /><YAxis domain={['auto', 'auto']} hide /><Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155' }} formatter={v => [(v * 100).toFixed(1) + "%", "Eff"]} /><Area type="monotone" dataKey="val" stroke="#10b981" fill="url(#colorEff)" strokeWidth={2} /></AreaChart></ResponsiveContainer></div></div>)}
+            
+            {/* ACCURACY SUMMARY CARDS */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="bg-[#252630] p-4 rounded-xl border border-slate-800">
+                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Avg Error (30d)</p>
+                <div className="flex items-end gap-1"><h3 className="text-xl font-bold text-white">±{avgError}%</h3></div>
+              </div>
+              <div className="bg-[#252630] p-4 rounded-xl border border-slate-800">
+                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Calibration Days</p>
+                <h3 className="text-xl font-bold text-indigo-400">{daysEntered}</h3>
+              </div>
+              <div className="bg-[#252630] p-4 rounded-xl border border-slate-800">
+                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Best Day</p>
+                {bestDay ? (
+                  <div className="text-[10px] font-bold text-emerald-400 leading-tight">
+                    {bestDay.date.toLocaleDateString([], { month: 'short', day: 'numeric' })} &bull; {(bestDay.absDelta * 100).toFixed(1)}% off
+                  </div>
+                ) : <span className="text-slate-600 text-[10px]">--</span>}
+              </div>
+              <div className="bg-[#252630] p-4 rounded-xl border border-slate-800">
+                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Worst Day</p>
+                {worstDay ? (
+                  <div className="text-[10px] font-bold text-amber-400 leading-tight">
+                    {worstDay.date.toLocaleDateString([], { month: 'short', day: 'numeric' })} &bull; {(worstDay.absDelta * 100).toFixed(1)}% off
+                  </div>
+                ) : <span className="text-slate-600 text-[10px]">--</span>}
+              </div>
+            </div>
+
+            {/* ACCURACY CHART */}
+            <div className="bg-[#252630] p-4 md:p-6 rounded-2xl border border-slate-700/50 shadow-lg overflow-hidden">
+              <div className="flex justify-between items-center mb-6">
+                 <h2 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2"><TrendingUp className="w-4 h-4 text-indigo-400" /> Model vs Actuals (30d)</h2>
+                 <div className="flex items-center gap-4 text-[10px]">
+                    <div className="flex items-center gap-1"><div className="w-2 h-2 bg-indigo-500 rounded-sm"></div> <span className="text-slate-500 uppercase font-bold">Model</span></div>
+                    <div className="flex items-center gap-1"><div className="w-2 h-2 bg-emerald-400 rounded-sm"></div> <span className="text-slate-500 uppercase font-bold">Actual</span></div>
+                 </div>
+              </div>
+              
+              <div className="overflow-x-auto custom-scrollbar pb-4">
+                <div className="min-w-[600px] h-[200px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={accuracyChartData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
+                      <XAxis dataKey="label" stroke="#475569" fontSize={10} axisLine={false} tickLine={false} />
+                      <YAxis stroke="#475569" fontSize={10} axisLine={false} tickLine={false} unit="kWh" />
+                      <YAxis yAxisId="right" orientation="right" domain={[0, 50]} hide />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px', fontSize: '10px' }}
+                        itemStyle={{ padding: '2px 0' }}
+                      />
+                      <Bar dataKey="model" name="Modelled" fill="#6366f1" radius={[2, 2, 0, 0]} barSize={8} />
+                      <Bar dataKey="actual" name="Actual" fill="#10b981" radius={[2, 2, 0, 0]} barSize={8} />
+                      <Bar dataKey="excludedModel" stackId="a" name="Excluded" fill="#334155" opacity={0.3} barSize={8} />
+                      <Bar dataKey="excludedActual" stackId="a" fill="#334155" opacity={0.3} barSize={8} />
+                      <Line yAxisId="right" type="monotone" dataKey="rollingAvg" name="7d Avg Error %" stroke="#818cf8" strokeWidth={2} dot={false} strokeDasharray="4 4" />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <p className="text-[9px] text-slate-600 text-center uppercase tracking-widest mt-2 font-bold">Swipe to view full 30-day history</p>
+            </div>
+
             <div className="bg-[#252630] rounded-2xl border border-slate-700/50 overflow-hidden shadow-lg"><div className="p-4 border-b border-slate-700/50 bg-[#1e293b]/50 flex justify-between items-center"><h2 className="text-sm font-black text-white uppercase tracking-widest">Historical Production</h2><span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest italic">kWh Reading</span></div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-[#1e293b]/50 border-b border-slate-700"><tr className="text-slate-400 uppercase text-[10px] font-black tracking-widest"><th className="p-4">Date</th><th className="p-4">Model</th><th className="p-4 text-indigo-400">Actual</th><th className="p-4 text-right">Action</th></tr></thead><tbody className="text-slate-300 divide-y divide-slate-700/50">{dailyTotals.slice().reverse().filter(d => d.dayOffset < 0 || actuals[d.isoDate]).map((day) => { const isExcluded = (config.excludedDays || []).includes(day.isoDate); const snapshot = Number(snapshots[day.isoDate] || day.yield); const actual = Number(actuals[day.isoDate]) || 0; const delta = actual > 0 ? ((actual - snapshot) / snapshot * 100).toFixed(1) : null; return (<tr key={day.isoDate} className={`hover:bg-[#2d2e3a] transition-colors ${isExcluded ? 'opacity-40 grayscale' : ''}`}><td className="p-4"><div className="font-bold text-xs">{day.date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</div>{delta && <div className={`text-[9px] font-black ${Number(delta) > 0 ? 'text-emerald-500' : 'text-amber-500'}`}>{delta}% delta</div>}</td><td className="p-4 font-mono text-xs text-slate-500">{snapshot.toFixed(2)} <span className="text-[9px]">kWh</span></td><td className="p-4"><div className="flex items-center gap-2"><input type="number" value={actuals[day.isoDate] || ''} onChange={e => saveActualToCloud(day.isoDate, e.target.value)} className="w-16 h-8 bg-[#1a1b23] border border-slate-600 rounded px-2 text-white text-xs font-mono" placeholder="0.0" /><Zap className="w-3 h-3 text-slate-600" /></div></td><td className="p-4 text-right"><button onClick={() => { if (isExcluded) { saveConfigToCloud({ ...config, excludedDays: config.excludedDays.filter(d => d !== day.isoDate) }); } else { excludeDay(day.isoDate); } }} className={`px-3 py-1 rounded text-[9px] font-black uppercase border transition-all ${isExcluded ? 'bg-indigo-600 border-indigo-400 text-white' : 'border-slate-700 text-slate-500 hover:text-white hover:border-slate-400'}`}>{isExcluded ? "Include" : "Exclude"}</button></td></tr>); })}</tbody></table></div></div>
           </div>
         )}
