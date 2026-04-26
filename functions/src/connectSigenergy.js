@@ -2,9 +2,10 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const axios = require("axios");
 const REGIONS = {
-  EU: "https://api-eu.sigencloud.com/v1",
-  AUS: "https://api-aus.sigencloud.com/v1",
-  GLOBAL: "https://api.sigencloud.com/v1",
+  eu: "https://api-eu.sigencloud.com/",
+  cn: "https://api-cn.sigencloud.com/",
+  apac: "https://api-apac.sigencloud.com/",
+  us: "https://api-us.sigencloud.com/",
 };
 
 /**
@@ -18,9 +19,9 @@ exports.connectSigenergy = onCall({
     throw new HttpsError("unauthenticated", "User must be signed in.");
   }
 
-  const { email, password, region = "EU", solarcasterSystemId } = request.data;
+  const { email, password, region = "eu", solarcasterSystemId } = request.data;
   const uid = request.auth.uid;
-  const baseUrl = REGIONS[region] || REGIONS.EU;
+  const baseUrl = REGIONS[region] || REGIONS.eu;
 
   if (!solarcasterSystemId) {
     throw new HttpsError("invalid-argument", "solarcasterSystemId is required.");
@@ -28,7 +29,7 @@ exports.connectSigenergy = onCall({
 
   try {
     // 1. Login to Sigenergy
-    const loginRes = await axios.post(`${baseUrl}/login`, {
+    const loginRes = await axios.post(`${baseUrl}auth/oauth/token`, {
       username: email,
       password: password,
       terminalType: 1, // Mimic mobile app
@@ -41,7 +42,7 @@ exports.connectSigenergy = onCall({
     const { token, refreshToken } = loginRes.data.data;
 
     // 2. Discover Stations (Systems)
-    const stationRes = await axios.get(`${baseUrl}/station/list`, {
+    const stationRes = await axios.get(`${baseUrl}station/list`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (stationRes.data.code !== 0 || !stationRes.data.data.list?.length) {

@@ -32,10 +32,10 @@ exports.syncDailyYield = onSchedule({
   const results = await Promise.all(snap.docs.map(async (doc) => {
     const { token, stationId, region, solarcasterSystemId } = doc.data();
     const uid = doc.ref.parent.parent.id;
-    const baseUrl = REGIONS[region] || REGIONS.EU;
+    const baseUrl = REGIONS[region] || REGIONS.eu;
 
     try {
-      const dayRes = await axios.get(`${baseUrl}/station/day`, {
+      const dayRes = await axios.get(`${baseUrl}station/day`, {
         params: { stationId, date: isoDate },
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -43,7 +43,7 @@ exports.syncDailyYield = onSchedule({
       if (dayRes.data.code === 401 || dayRes.data.code === 403) {
         const newToken = await refreshSigenergyToken(uid);
         if (newToken) {
-          const retryRes = await axios.get(`${baseUrl}/station/day`, {
+          const retryRes = await axios.get(`${baseUrl}station/day`, {
             params: { stationId, date: isoDate },
             headers: { Authorization: `Bearer ${newToken}` }
           });

@@ -25,10 +25,10 @@ exports.pollRealtimeData = onSchedule({
   const results = await Promise.all(snap.docs.map(async (doc) => {
     const { token, stationId, region } = doc.data();
     const uid = doc.ref.parent.parent.id;
-    const baseUrl = REGIONS[region] || REGIONS.EU;
+    const baseUrl = REGIONS[region] || REGIONS.eu;
 
     try {
-      const realtimeRes = await axios.get(`${baseUrl}/station/realtime`, {
+      const realtimeRes = await axios.get(`${baseUrl}station/realtime`, {
         params: { stationId },
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -36,7 +36,7 @@ exports.pollRealtimeData = onSchedule({
       if (realtimeRes.data.code === 401 || realtimeRes.data.code === 403) {
         const newToken = await refreshSigenergyToken(uid);
         if (newToken) {
-          const retryRes = await axios.get(`${baseUrl}/station/realtime`, {
+          const retryRes = await axios.get(`${baseUrl}station/realtime`, {
             params: { stationId },
             headers: { Authorization: `Bearer ${newToken}` }
           });

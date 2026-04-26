@@ -59,7 +59,7 @@ export default function App() {
   const [mapboxSession, setMapboxSession] = useState("");
 
   const [showSigenModal, setShowSigenModal] = useState(false);
-  const [sigenForm, setSigenForm] = useState({ email: '', password: '', region: 'EU' });
+  const [sigenForm, setSigenForm] = useState({ email: '', password: '', region: 'eu' });
   const [sigenConnecting, setSigenConnecting] = useState(false);
 
   const [visibleSeries, setVisibleSeries] = useState({
@@ -741,9 +741,10 @@ export default function App() {
                     onChange={e => setSigenForm({...sigenForm, region: e.target.value})}
                     className="w-full p-3 bg-solar-bg border border-slate-700 rounded-xl text-white outline-none focus:border-solar-indigo transition-all"
                   >
-                    <option value="EU">Europe</option>
-                    <option value="AUS">Australia</option>
-                    <option value="GLOBAL">Global / Asia</option>
+                    <option value="eu">Europe</option>
+                    <option value="apac">Asia-Pacific (APAC)</option>
+                    <option value="us">North America (US)</option>
+                    <option value="cn">China (CN)</option>
                   </select>
                 </div>
               </div>

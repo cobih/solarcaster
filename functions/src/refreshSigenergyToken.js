@@ -2,9 +2,10 @@ const admin = require("firebase-admin");
 const axios = require("axios");
 
 const REGIONS = {
-  EU: "https://api-eu.sigencloud.com/v1",
-  AUS: "https://api-aus.sigencloud.com/v1",
-  GLOBAL: "https://api.sigencloud.com/v1",
+  eu: "https://api-eu.sigencloud.com/",
+  cn: "https://api-cn.sigencloud.com/",
+  apac: "https://api-apac.sigencloud.com/",
+  us: "https://api-us.sigencloud.com/",
 };
 
 /**
@@ -23,10 +24,10 @@ async function refreshSigenergyToken(uid) {
     return null;
   }
 
-  const baseUrl = REGIONS[region] || REGIONS.EU;
+  const baseUrl = REGIONS[region] || REGIONS.eu;
 
   try {
-    const res = await axios.post(`${baseUrl}/token/refresh`, {
+    const res = await axios.post(`${baseUrl}token/refresh`, {
       refreshToken,
     });
 
