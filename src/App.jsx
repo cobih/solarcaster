@@ -489,39 +489,6 @@ export default function App() {
               {isDemo ? "📍 Demo System" : (config.locationName || "My Home")}
               <ChevronDown className={`w-3 h-3 transition-transform ${showSwitcher ? 'rotate-180' : ''}`} />
             </button>
-
-            {showSwitcher && (
-              <div className="absolute top-full left-0 mt-2 w-64 bg-solar-card border border-slate-700 rounded-xl shadow-2xl z-[70] animate-in fade-in slide-in-from-top-2 overflow-hidden">
-                <div className="p-3 border-b border-slate-800 bg-solar-bg/50">
-                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">My Properties</p>
-                </div>
-                <div className="max-h-64 overflow-y-auto custom-scrollbar">
-                  {systems.map(s => (
-                    <button 
-                      key={s.id} 
-                      onClick={() => { setCurrentSystemId(s.id); setShowSwitcher(false); }}
-                      className={`w-full p-4 text-left hover:bg-indigo-600/10 flex items-center gap-3 transition-colors border-b border-slate-800/50 last:border-0 ${currentSystemId === s.id ? 'bg-indigo-600/5 border-l-2 border-l-indigo-500' : ''}`}
-                    >
-                      <Home className={`w-4 h-4 ${currentSystemId === s.id ? 'text-indigo-400' : 'text-slate-600'}`} />
-                      <div className="min-w-0 flex-1">
-                        <p className={`text-sm font-bold truncate ${currentSystemId === s.id ? 'text-white' : 'text-slate-400'}`}>{s.locationName}</p>
-                        {s.id === 'demo' && <p className="text-[8px] text-amber-500 font-bold uppercase">Guest Mode</p>}
-                      </div>
-                      {currentSystemId === s.id && <Activity className="w-3 h-3 text-indigo-500 animate-pulse" />}
-                    </button>
-                  ))}
-                </div>
-                {!isDemo && (
-                  <button 
-                    onClick={handleAddSystem}
-                    className="w-full p-4 text-left hover:bg-emerald-600/10 flex items-center gap-3 text-emerald-400 transition-colors border-t border-slate-800 bg-solar-bg/30"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span className="text-xs font-black uppercase tracking-widest">Add New Property</span>
-                  </button>
-                )}
-              </div>
-            )}
           </div>
           <div className="flex items-center gap-2 md:gap-3">
             <button onClick={() => isDemo ? setIsDemo(false) : setShowConfig(!showConfig)} className={`relative p-2 md:px-4 md:py-2 bg-solar-card border ${canApply && !isDemo ? 'border-amber-500 text-amber-400' : 'border-slate-700 text-slate-300'} rounded-lg flex items-center gap-2 shadow-sm transition-all hover:bg-slate-800`}>{isDemo ? <Lock className="w-4 h-4" /> : (canApply ? <Activity className="w-4 h-4 animate-pulse" /> : <Settings className="w-4 h-4" />)}<span className="hidden md:inline">{isDemo ? "Sign In" : "Settings"}</span>{canApply && !isDemo && <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full border-2 border-solar-bg"></span>}</button>
@@ -532,6 +499,39 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        {showSwitcher && (
+          <div className="bg-solar-card border border-slate-700 rounded-2xl shadow-xl animate-in fade-in slide-in-from-top-2 overflow-hidden w-full md:w-96">
+            <div className="p-3 border-b border-slate-800 bg-solar-bg">
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">My Properties</p>
+            </div>
+            <div className="max-h-64 overflow-y-auto custom-scrollbar">
+              {systems.map(s => (
+                <button 
+                  key={s.id} 
+                  onClick={() => { setCurrentSystemId(s.id); setShowSwitcher(false); }}
+                  className={`w-full p-4 text-left hover:bg-indigo-600/10 flex items-center gap-3 transition-colors border-b border-slate-800/50 last:border-0 ${currentSystemId === s.id ? 'bg-indigo-600/5 border-l-2 border-l-indigo-500' : ''}`}
+                >
+                  <Home className={`w-4 h-4 ${currentSystemId === s.id ? 'text-indigo-400' : 'text-slate-600'}`} />
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-sm font-bold truncate ${currentSystemId === s.id ? 'text-white' : 'text-slate-400'}`}>{s.locationName}</p>
+                    {s.id === 'demo' && <p className="text-[8px] text-amber-500 font-bold uppercase">Guest Mode</p>}
+                  </div>
+                  {currentSystemId === s.id && <Activity className="w-3 h-3 text-indigo-500 animate-pulse" />}
+                </button>
+              ))}
+            </div>
+            {!isDemo && (
+              <button 
+                onClick={handleAddSystem}
+                className="w-full p-4 text-left hover:bg-emerald-600/10 flex items-center gap-3 text-emerald-400 transition-colors border-t border-slate-800 bg-solar-bg"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="text-xs font-black uppercase tracking-widest">Add New Property</span>
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="hidden md:flex items-center gap-1 p-1 bg-solar-card rounded-xl border border-slate-800 w-fit">
           {['today', 'forecast', 'history'].map(tab => (<button key={tab} onClick={() => setActiveTab(tab)} className={`px-6 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === tab ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</button>))}
