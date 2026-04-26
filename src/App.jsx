@@ -28,7 +28,7 @@ export default function App() {
   const [isDemo, setIsDemo] = useState(false);
 
   const { 
-    config, actuals, snapshots, systems, sigenergy, currentSystemId, setCurrentSystemId, 
+    config, actuals, actualsData, snapshots, systems, sigenergy, currentSystemId, setCurrentSystemId, 
     addNewSystem, deleteSystem, disconnectSystem,
     dbSyncing, dbStatus, lastSynced, 
     saveConfigToCloud, saveActualToCloud, saveSnapshotToCloud, publishForecast 
@@ -392,7 +392,7 @@ export default function App() {
     setSigenConnecting(true);
     try {
       const connectFn = httpsCallable(functions, 'connectSigenergy');
-      const result = await connectFn(sigenForm);
+      const result = await connectFn({ ...sigenForm, solarcasterSystemId: currentSystemId });
       if (result.data.success) {
         setShowSigenModal(false);
         setSigenForm({ email: '', password: '', region: 'EU' });
@@ -779,7 +779,7 @@ export default function App() {
                     {needsEntry && !isDemo && <div className="w-2 h-2 bg-amber-500 rounded-full ml-auto animate-ping"></div>}
                   </label>
                   <div className="mt-2 flex items-center gap-2">
-                    {sigenergy?.status === 'connected' ? (
+                    {actualsData[todayForecast.isoDate]?.source === 'sigenergy' ? (
                        <div className="flex flex-col">
                          <div className="text-3xl font-bold text-white">{actuals[todayForecast.isoDate] || '0.0'}</div>
                          <div className="flex items-center gap-1.5 mt-1 text-[8px] font-black text-solar-emerald uppercase tracking-widest bg-solar-emerald/10 px-2 py-0.5 rounded-full w-fit border border-solar-emerald/20">
@@ -799,7 +799,7 @@ export default function App() {
                     <span className="text-slate-500 font-medium text-xs ml-auto">kWh</span>
                   </div>
                 </div>
-                <p className="mt-4 text-[10px] text-slate-500 italic leading-tight">{isDemo ? "Sign in to log actuals and tune your model." : (sigenergy?.status === 'connected' ? "Daily actuals sync automatically at 23:00." : "Syncs to cloud for model tuning.")}</p>
+                <p className="mt-4 text-[10px] text-slate-500 italic leading-tight">{isDemo ? "Sign in to log actuals and tune your model." : (actualsData[todayForecast.isoDate]?.source === 'sigenergy' ? "Daily actuals sync automatically at 23:00." : "Syncs to cloud for model tuning.")}</p>
               </div>
 
               <div className={`p-5 rounded-xl border shadow-sm flex flex-col justify-between transition-all duration-700 relative overflow-hidden ${isCalculating ? 'scale-[1.05] shadow-[0_0_20px_rgba(16,185,129,0.3)] border-emerald-500/50 bg-emerald-900/10' : (daysEntered > 0 ? (isAccurate ? 'bg-emerald-900/10 border-emerald-500/20' : 'bg-amber-900/10 border-amber-500/20') : 'bg-solar-card border-slate-700/50')}`}>

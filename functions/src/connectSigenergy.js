@@ -1,4 +1,4 @@
-const functions = require("firebase-functions");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const axios = require("axios");
 
@@ -8,20 +8,22 @@ const REGIONS = {
 };
 
 /**
- * HTTPS Callable: connectSigenergy
- * Exchanges mySigen credentials for a token and stores it.
+ * 2nd Gen HTTPS Callable: connectSigenergy
  */
-exports.connectSigenergy = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "User must be signed in.");
+exports.connectSigenergy = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "User must be signed in.");
   }
 
-  const { email, password, region = "EU" } = data;
-  const uid = context.auth.uid;
+  const { email, password, region = "EU", solarcasterSystemId } = request.data;
+  const uid = request.auth.uid;
   const baseUrl = REGIONS[region] || REGIONS.EU;
 
+  if (!solarcasterSystemId) {
+    throw new HttpsError("invalid-argument", "solarcasterSystemId is required.");
+  }
+
   try {
-    // 1. Login to Sigenergy
     const loginRes = await axios.post(`${baseUrl}/login`, {
       username: email,
       password: password,
@@ -33,7 +35,6 @@ exports.connectSigenergy = functions.https.onCall(async (data, context) => {
 
     const { token, refreshToken } = loginRes.data.data;
 
-    // 2. Discover Stations (Systems)
     const stationRes = await axios.get(`${baseUrl}/station/list`, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -42,10 +43,9 @@ exports.connectSigenergy = functions.https.onCall(async (data, context) => {
       throw new Error("No solar stations found on this account.");
     }
 
-    const station = stationRes.data.data.list[0]; // Connect to the first one for now
+    const station = stationRes.data.data.list[0];
     const stationId = station.stationId;
 
-    // 3. Store Integration Metadata
     const db = admin.firestore();
     const integrationRef = db.collection("users").doc(uid).collection("integrations").doc("sigenergy");
 
@@ -54,6 +54,7 @@ exports.connectSigenergy = functions.https.onCall(async (data, context) => {
       refreshToken: refreshToken || null,
       region,
       stationId,
+      solarcasterSystemId,
       status: "connected",
       connectedAt: admin.firestore.FieldValue.serverTimestamp(),
       lastSynced: admin.firestore.FieldValue.serverTimestamp(),
@@ -67,6 +68,6 @@ exports.connectSigenergy = functions.https.onCall(async (data, context) => {
 
   } catch (err) {
     console.error("Sigenergy Connection Error:", err.message);
-    throw new functions.https.HttpsError("internal", err.message || "Failed to connect to Sigenergy.");
+    throw new HttpsError("internal", err.message || "Failed to connect to Sigenergy.");
   }
 });
