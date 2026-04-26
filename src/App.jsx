@@ -741,8 +741,9 @@ export default function App() {
                     onChange={e => setSigenForm({...sigenForm, region: e.target.value})}
                     className="w-full p-3 bg-solar-bg border border-slate-700 rounded-xl text-white outline-none focus:border-solar-indigo transition-all"
                   >
-                    <option value="EU">Europe (EU)</option>
-                    <option value="GLOBAL">Global / Australia</option>
+                    <option value="EU">Europe</option>
+                    <option value="AUS">Australia</option>
+                    <option value="GLOBAL">Global / Asia</option>
                   </select>
                 </div>
               </div>

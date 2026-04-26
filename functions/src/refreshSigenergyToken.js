@@ -2,8 +2,9 @@ const admin = require("firebase-admin");
 const axios = require("axios");
 
 const REGIONS = {
-  EU: "https://openapi-eu.sigenergy.com",
-  GLOBAL: "https://openapi.sigenergy.com",
+  EU: "https://api-eu.sigencloud.com/v1",
+  AUS: "https://api-aus.sigencloud.com/v1",
+  GLOBAL: "https://api.sigencloud.com/v1",
 };
 
 /**

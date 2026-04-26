@@ -1,16 +1,17 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const axios = require("axios");
-
 const REGIONS = {
-  EU: "https://openapi-eu.sigenergy.com",
-  GLOBAL: "https://openapi.sigenergy.com",
+  EU: "https://api-eu.sigencloud.com/v1",
+  AUS: "https://api-aus.sigencloud.com/v1",
+  GLOBAL: "https://api.sigencloud.com/v1",
 };
 
 /**
  * 2nd Gen HTTPS Callable: connectSigenergy
  */
 exports.connectSigenergy = onCall({
+  cors: true,
   allowUnauthenticated: true
 }, async (request) => {
   if (!request.auth) {
@@ -26,9 +27,11 @@ exports.connectSigenergy = onCall({
   }
 
   try {
+    // 1. Login to Sigenergy
     const loginRes = await axios.post(`${baseUrl}/login`, {
       username: email,
       password: password,
+      terminalType: 1, // Mimic mobile app
     });
 
     if (loginRes.data.code !== 0) {
@@ -37,10 +40,10 @@ exports.connectSigenergy = onCall({
 
     const { token, refreshToken } = loginRes.data.data;
 
+    // 2. Discover Stations (Systems)
     const stationRes = await axios.get(`${baseUrl}/station/list`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-
     if (stationRes.data.code !== 0 || !stationRes.data.data.list?.length) {
       throw new Error("No solar stations found on this account.");
     }
