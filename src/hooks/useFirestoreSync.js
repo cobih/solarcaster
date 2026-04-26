@@ -74,44 +74,49 @@ export const useFirestoreSync = (user, appId) => {
 
     const systemsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'systems');
     const unsubSystems = onSnapshot(systemsRef, async (snap) => {
-      if (snap.empty) {
-        // Check for legacy data
-        const legacyRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'config');
-        const legacySnap = await getDoc(legacyRef);
-        
-        if (legacySnap.exists()) {
-          // MIGRATE: Copy legacy data to default system
-          const legacyData = legacySnap.data();
-          const defaultSystemRef = doc(db, 'artifacts', appId, 'users', user.uid, 'systems', 'default');
-          const defaultDataRef = doc(db, 'artifacts', appId, 'users', user.uid, 'systems', 'default', 'solar_app', 'config');
+      try {
+        if (snap.empty) {
+          // Check for legacy data
+          const legacyRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'config');
+          const legacySnap = await getDoc(legacyRef);
           
-          await setDoc(defaultSystemRef, { 
-            id: 'default', 
-            locationName: legacyData.locationName || "My Home",
-            createdAt: new Date().toISOString()
-          });
-          
-          // Move documents
-          const legacyActualsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'actuals');
-          const legacySnapshotsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'snapshots');
-          
-          const actualsSnap = await getDoc(legacyActualsRef);
-          const snapshotsSnap = await getDoc(legacySnapshotsRef);
+          if (legacySnap.exists()) {
+            // MIGRATE: Copy legacy data to default system
+            const legacyData = legacySnap.data();
+            const defaultSystemRef = doc(db, 'artifacts', appId, 'users', user.uid, 'systems', 'default');
+            
+            await setDoc(defaultSystemRef, { 
+              id: 'default', 
+              locationName: legacyData.locationName || "My Home",
+              createdAt: new Date().toISOString()
+            });
+            
+            // Move documents
+            const legacyActualsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'actuals');
+            const legacySnapshotsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'snapshots');
+            
+            const actualsSnap = await getDoc(legacyActualsRef);
+            const snapshotsSnap = await getDoc(legacySnapshotsRef);
 
-          await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'systems', 'default', 'solar_app', 'config'), legacyData);
-          if (actualsSnap.exists()) await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'systems', 'default', 'solar_app', 'actuals'), actualsSnap.data());
-          if (snapshotsSnap.exists()) await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'systems', 'default', 'solar_app', 'snapshots'), snapshotsSnap.data());
-          
-          setSystems([{ id: 'default', locationName: legacyData.locationName || "My Home" }]);
+            await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'systems', 'default', 'solar_app', 'config'), legacyData);
+            if (actualsSnap.exists()) await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'systems', 'default', 'solar_app', 'actuals'), actualsSnap.data());
+            if (snapshotsSnap.exists()) await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'systems', 'default', 'solar_app', 'snapshots'), snapshotsSnap.data());
+            
+            setSystems([{ id: 'default', locationName: legacyData.locationName || "My Home" }]);
+          } else {
+            // Initialize fresh default if no legacy data
+            const defaultSystemRef = doc(db, 'artifacts', appId, 'users', user.uid, 'systems', 'default');
+            await setDoc(defaultSystemRef, { id: 'default', locationName: "My Home", createdAt: new Date().toISOString() });
+            setSystems([{ id: 'default', locationName: "My Home" }]);
+          }
         } else {
-          // Initialize fresh default if no legacy data
-          const defaultSystemRef = doc(db, 'artifacts', appId, 'users', user.uid, 'systems', 'default');
-          await setDoc(defaultSystemRef, { id: 'default', locationName: "My Home", createdAt: new Date().toISOString() });
-          setSystems([{ id: 'default', locationName: "My Home" }]);
+          const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          setSystems(list);
         }
-      } else {
-        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setSystems(list);
+      } catch (err) {
+        console.error("System Discovery/Migration Error:", err);
+        // Fallback to a default system if something goes wrong
+        setSystems([{ id: 'default', locationName: "My Home" }]);
       }
     });
 

@@ -23,7 +23,7 @@ const MBT = "pk.eyJ1I" + "joiY29iaWgiLCJhI" + "joiY21vZmZhamxwMGxlaDJvcjN5YnJkYW
 let searchTimeout;
 
 export default function App() {
-  const { user, authLoading, login, logout } = useSolarAuth();
+  const { user, authLoading, authError, login, logout } = useSolarAuth();
   const [isDemo, setIsDemo] = useState(false);
 
   const { 
@@ -378,14 +378,26 @@ export default function App() {
   if (authLoading) return <div className="flex items-center justify-center h-screen bg-solar-bg text-white"><MapPin className="w-12 h-12 text-indigo-500 animate-pulse" /></div>;
   if (!user && !isDemo) return (
     <div className="flex items-center justify-center min-h-screen bg-solar-bg p-6 text-center">
-      <div className="max-w-md w-full bg-solar-card p-8 rounded-2xl border border-slate-700 shadow-2xl">
-        <Sun className="w-12 h-12 text-indigo-500 mx-auto mb-4" />
-        <h1 className="text-3xl font-bold text-white mb-2">Solarcaster</h1>
-        <p className="text-slate-400 mb-8">Personalized solar forecasting and auto-calibration.</p>
-        <div className="space-y-3">
-          <button onClick={handleLogin} className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98]"><LogIn className="w-5 h-5" /> Sign in with Google</button>
-          <button onClick={handleDemo} className="w-full py-4 bg-slate-800 text-slate-300 rounded-xl font-bold hover:bg-slate-750 border border-slate-700 transition-all active:scale-[0.98]">Try Live Demo</button>
+      <div className="max-w-md w-full bg-solar-card p-8 rounded-2xl border border-slate-700 shadow-2xl space-y-6">
+        <div>
+          <Sun className="w-12 h-12 text-solar-yellow mx-auto mb-4" />
+          <h1 className="text-3xl font-bold text-white mb-2">Solarcaster</h1>
+          <p className="text-slate-400">Personalized solar forecasting and auto-calibration.</p>
         </div>
+
+        {authError && (
+          <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center gap-3 text-red-400 text-xs text-left animate-in shake-in-1">
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            <p>{authError}</p>
+          </div>
+        )}
+
+        <div className="space-y-3 pt-4">
+          <button onClick={handleLogin} className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg shadow-indigo-500/20"><LogIn className="w-5 h-5" /> Sign in with Google</button>
+          <button onClick={handleDemo} className="w-full py-4 bg-solar-bg/50 text-slate-300 rounded-xl font-bold hover:bg-solar-card border border-slate-700 transition-all active:scale-[0.98]">Continue as Guest</button>
+        </div>
+        
+        <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Secure Cloud Persistence</p>
       </div>
     </div>
   );

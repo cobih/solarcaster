@@ -3,12 +3,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // NEW RULE: Support for multiple systems/addresses
-    // Path: /artifacts/solar-forecaster-63320/users/{userId}/systems/{systemId}/{document}
-    match /artifacts/solar-forecaster-63320/users/{userId}/systems/{systemId}/{document} {
+    // NEW RULE: Support for multiple systems/addresses (recursive to catch solar_app subcollection)
+    match /artifacts/solar-forecaster-63320/users/{userId}/systems/{systemId}/{document=**} {
       allow read: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null && request.auth.uid == userId 
-                   && (document != 'config' || request.resource.data.schemaVersion >= 2);
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
 
     // LEGACY RULE: Support for original single-system path (required for migration)
