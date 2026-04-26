@@ -36,7 +36,7 @@ export const useFirestoreSync = (user, appId) => {
   const [dbStatus, setDbStatus] = useState(isDemo ? "Demo Mode" : "Idle");
   const [lastSynced, setLastSynced] = useState(null);
 
-  const [config, setConfig] = useState(isDemo ? DEMO_CONFIG : {
+  const [config, setConfig] = useState({
     lat: null,
     long: null,
     eff: 0.85,
@@ -59,10 +59,17 @@ export const useFirestoreSync = (user, appId) => {
     showEconomics: false,
   });
 
-  const [actuals, setActuals] = useState(isDemo ? {
-    "2026-04-26": 24.5,
-    "2026-04-25": 18.2
-  } : {});
+  // Handle Demo config reset on user change
+  useEffect(() => {
+    if (isDemo) {
+      setConfig(DEMO_CONFIG);
+      setActuals({
+        "2026-04-26": 24.5,
+        "2026-04-25": 18.2
+      });
+      setDbStatus("Demo Mode");
+    }
+  }, [isDemo]);
   
   const [snapshots, setSnapshots] = useState(isDemo ? {} : {});
 

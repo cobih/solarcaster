@@ -332,7 +332,7 @@ export default function App() {
     </div>
   );
 
-  if (!config.locationSet || !config.arraysSet) return (
+  if ((!config.locationSet || !config.arraysSet) && !isDemo) return (
     <div className="min-h-screen bg-[#1a1b23] p-6 flex items-center justify-center">
       <div className="max-w-xl w-full space-y-8 animate-in fade-in zoom-in-95">
         <div className="text-center"><h2 className="text-3xl font-black text-white uppercase tracking-tighter">Calibration</h2><p className="text-slate-400 mt-1 font-medium">{onboardingStep === 1 ? "Step 1: Location" : "Step 2: Arrays"}</p></div>
