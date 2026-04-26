@@ -541,9 +541,32 @@ export default function App() {
                 <p className="mt-4 text-[10px] text-slate-500 italic leading-tight">{isDemo ? "Sign in to log actuals and tune your model." : "Syncs to cloud for model tuning."}</p>
               </div>
 
-              <div className={`p-5 rounded-xl border shadow-sm flex flex-col justify-between transition-all duration-700 ${isCalculating ? 'scale-[1.05] shadow-[0_0_20px_rgba(16,185,129,0.3)] border-emerald-500/50 bg-emerald-900/10' : (daysEntered > 0 ? (isAccurate ? 'bg-emerald-900/10 border-emerald-500/20' : 'bg-amber-900/10 border-amber-500/20') : 'bg-solar-card border-slate-700/50')}`}>
-                <div><p className="text-slate-400 text-sm font-medium mb-1 flex items-center gap-2"><Target className={`w-4 h-4 ${isCalculating ? 'animate-spin text-emerald-400' : ''}`} /> Accuracy</p>{daysEntered > 0 ? (<div className="space-y-1 mt-2"><div className="flex items-end gap-2"><h2 className={`text-3xl font-bold ${isAccurate ? 'text-emerald-400' : 'text-amber-400'}`}>{accuracyPercentage}%</h2><span className="text-[10px] text-slate-500 mb-1 font-black uppercase tracking-tighter text-xs font-black">Accuracy</span></div><p className="text-[10px] text-slate-500 font-medium uppercase tracking-tighter">Delta: <span className={sumActuals > sumModel ? "text-emerald-500" : "text-amber-500"}>{sumActuals > sumModel ? "+" : ""}{(sumActuals - sumModel).toFixed(2)} kWh</span></p></div>) : <p className="text-slate-500 text-[10px] mt-3 leading-tight italic">Add daily readings to improve your forecast.</p>}</div>
-                {canApply && <button onClick={() => saveConfigToCloud({ ...config, eff: suggestedEff })} className="mt-3 w-full py-2 text-[10px] font-black rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 tracking-widest hover:bg-amber-500/30 transition-all uppercase">Apply Tuning</button>}
+              <div className={`p-5 rounded-xl border shadow-sm flex flex-col justify-between transition-all duration-700 relative overflow-hidden ${isCalculating ? 'scale-[1.05] shadow-[0_0_20px_rgba(16,185,129,0.3)] border-emerald-500/50 bg-emerald-900/10' : (daysEntered > 0 ? (isAccurate ? 'bg-emerald-900/10 border-emerald-500/20' : 'bg-amber-900/10 border-amber-500/20') : 'bg-solar-card border-slate-700/50')}`}>
+                <div className={`transition-all duration-500 ${isDemo ? 'blur-md select-none pointer-events-none' : ''}`}>
+                  <p className="text-slate-400 text-sm font-medium mb-1 flex items-center gap-2"><Target className={`w-4 h-4 ${isCalculating ? 'animate-spin text-emerald-400' : ''}`} /> Accuracy</p>
+                  {daysEntered > 0 ? (
+                    <div className="space-y-1 mt-2">
+                      <div className="flex items-end gap-2"><h2 className={`text-3xl font-bold ${isAccurate ? 'text-emerald-400' : 'text-amber-400'}`}>{accuracyPercentage}%</h2><span className="text-[10px] text-slate-500 mb-1 font-black uppercase tracking-tighter text-xs font-black">Accuracy</span></div>
+                      <p className="text-[10px] text-slate-500 font-medium uppercase tracking-tighter">Delta: <span className={sumActuals > sumModel ? "text-emerald-500" : "text-amber-500"}>{sumActuals > sumModel ? "+" : ""}{(sumActuals - sumModel).toFixed(2)} kWh</span></p>
+                    </div>
+                  ) : (
+                    <p className="text-slate-500 text-[10px] mt-3 leading-tight italic">Add daily readings to improve your forecast.</p>
+                  )}
+                  {canApply && !isDemo && <button onClick={() => saveConfigToCloud({ ...config, eff: suggestedEff })} className="mt-3 w-full py-2 text-[10px] font-black rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 tracking-widest hover:bg-amber-500/30 transition-all uppercase">Apply Tuning</button>}
+                </div>
+                
+                {isDemo && (
+                  <div 
+                    onClick={() => setIsDemo(false)}
+                    className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-solar-bg/40 backdrop-blur-[2px] cursor-pointer group"
+                  >
+                    <Lock className="w-5 h-5 text-indigo-400 group-hover:scale-110 transition-transform" />
+                    <div className="text-center">
+                      <p className="text-[10px] font-black text-white uppercase tracking-widest">Calibration</p>
+                      <p className="text-[9px] text-slate-400 leading-tight">Sign in to track<br/>forecast accuracy</p>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="hidden md:flex bg-solar-card p-5 rounded-xl border border-slate-700/50 shadow-sm flex-col justify-between"><div><p className="text-slate-400 text-sm font-medium mb-1">Forecast Tomorrow</p><div className="flex items-end gap-2"><h2 className="text-3xl font-bold text-white">{tomorrowForecast.yield.toFixed(1)}</h2><span className="text-slate-500 mb-1 font-medium text-xs">kWh</span></div></div><div className="mt-4 flex items-center gap-2 text-[10px] text-blue-500 font-bold uppercase tracking-widest"><Calendar className="w-3 h-3" /> 24h prediction</div></div>
             </div>
