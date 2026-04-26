@@ -22,6 +22,17 @@ service cloud.firestore {
       allow read, update, delete: if false;
     }
 
+    // INTEGRATIONS: Support for Sigenergy and future integrations
+    match /users/{userId}/integrations/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // REALTIME DATA: 24h buffered power data from inverters
+    match /users/{userId}/sigenergy_realtime/{document=**} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false; // Only written by Cloud Functions
+    }
+
     // PUBLIC API: Allow anyone to read the forecast data if they have the UID
     // This allows Home Assistant to pull data without an API key
     match /public_forecasts/{userId} {

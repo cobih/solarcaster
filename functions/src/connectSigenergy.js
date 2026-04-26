@@ -10,7 +10,9 @@ const REGIONS = {
 /**
  * 2nd Gen HTTPS Callable: connectSigenergy
  */
-exports.connectSigenergy = onCall(async (request) => {
+exports.connectSigenergy = onCall({
+  allowUnauthenticated: true
+}, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "User must be signed in.");
   }

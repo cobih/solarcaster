@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { doc, setDoc, onSnapshot, collection, getDoc, query } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, collection, getDoc, query, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { sanitizeConfig } from '../utils/sanitize';
 
@@ -182,7 +182,7 @@ export const useFirestoreSync = (user, appId) => {
     try {
       await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'systems', currentSystemId, 'solar_app', 'actuals'), { [dayLabel]: value }, { merge: true });
       await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'systems', currentSystemId, 'solar_app', 'history', 'daily', dayLabel), { 
-        actual_kwh: Number(value), source: "manual", timestamp: new Date().toISOString(), calibration_excluded: (config.excludedDays || []).includes(dayLabel)
+        actual_kwh: Number(value), source: "manual", timestamp: serverTimestamp(), calibration_excluded: (config.excludedDays || []).includes(dayLabel)
       }, { merge: true });
       setDbStatus("Saved"); setLastSynced(new Date().toLocaleTimeString());
     } catch (err) { setDbStatus("Save Error"); }
