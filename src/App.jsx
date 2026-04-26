@@ -310,7 +310,6 @@ export default function App() {
                   <input 
                     type="text" 
                     value={addressQuery} 
-                    onFocus={startSearchSession}
                     onChange={(e) => searchAddress(e.target.value)} 
                     placeholder="Search address, postal code..." 
                     className="w-full pl-12 pr-4 py-4 bg-[#1a1b23] border border-slate-600 rounded-2xl text-white focus:border-indigo-500 outline-none transition-all" 
@@ -389,12 +388,10 @@ export default function App() {
                       <input 
                         type="text" 
                         value={addressQuery} 
-                        onFocus={startSearchSession} 
                         onChange={e => searchAddress(e.target.value)} 
                         placeholder="Postal code or city..." 
                         className="w-full pl-10 pr-4 py-2.5 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white focus:border-indigo-500 outline-none transition-all" 
-                      />
-                      {searchResults.length > 0 && (
+                      />                      {searchResults.length > 0 && (
                         <div className="absolute left-0 right-0 z-[1000] mt-2 bg-[#1a1b23] border border-slate-700 rounded-xl shadow-2xl overflow-y-auto max-h-[250px] custom-scrollbar">
                           {searchResults.map(r => (
                             <button key={r.id} onClick={() => selectLocation(r)} className="w-full px-4 py-3 text-left hover:bg-indigo-600/20 border-b border-slate-800 last:border-0 flex flex-col gap-0.5 transition-colors">
