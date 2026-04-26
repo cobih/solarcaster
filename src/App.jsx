@@ -50,6 +50,7 @@ export default function App() {
   const [lastSearchTime, setLastSearchTime] = useState(0);
   const [locationMode, setLocationMode] = useState("gps");
   const [manualCoords, setManualCoords] = useState({ lat: 53.3767, long: -6.3286 });
+  const [mapboxSession, setMapboxSession] = useState("");
 
   const [visibleSeries, setVisibleSeries] = useState({
     total: true, energy: true, clouds: true, strings: true, uncertainty: true
@@ -167,17 +168,33 @@ export default function App() {
     }
   }, [dailyTotals, selectedDayLabel]);
 
+  const getCurrencyForCountry = (country) => {
+    const map = { 'Ireland': '€', 'United Kingdom': '£', 'United States': '$', 'USA': '$', 'Germany': '€', 'France': '€', 'Spain': '€', 'Italy': '€', 'Australia': '$', 'Canada': '$', 'New Zealand': '$' };
+    return map[country] || '€';
+  };
+
+  const startSearchSession = () => {
+    if (!mapboxSession) setMapboxSession(crypto.randomUUID());
+  };
+
   const searchAddress = async (q) => {
     setAddressQuery(q);
-    if (q.length < 3) { setSearchResults([]); return; }
+    if (q.length < 2) { setSearchResults([]); return; }
     const now = Date.now();
-    if (now - lastSearchTime < 500) return;
+    if (now - lastSearchTime < 300) return;
     setLastSearchTime(now);
+    
+    let token = mapboxSession;
+    if (!token) {
+      token = crypto.randomUUID();
+      setMapboxSession(token);
+    }
+
     setSearchLoading(true);
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=5`);
-      const results = await res.json();
-      setSearchResults(results.map(r => ({ id: r.place_id, name: sanitizeString(r.display_name.split(',')[0] || ""), admin1: sanitizeString(r.address.county || r.address.state || ''), country: sanitizeString(r.address.country || ''), latitude: parseFloat(r.lat), longitude: parseFloat(r.lon), fullName: sanitizeString(r.display_name) })));
+      const res = await fetch(`https://api.mapbox.com/search/searchbox/v1/suggest?q=${encodeURIComponent(q)}&access_token=${import.meta.env.VITE_MAPBOX_TOKEN}&session_token=${token}&types=place,region,postcode,address&limit=5&proximity=ip`);
+      const data = await res.json();
+      setSearchResults(data.suggestions || []);
     } catch (err) { console.error(err); } finally { setSearchLoading(false); }
   };
 
@@ -196,9 +213,30 @@ export default function App() {
     }, () => setSearchLoading(false));
   };
 
-  const selectLocation = (res) => {
-    const c = ({ 'Ireland': '€', 'United Kingdom': '£', 'United States': '$', 'USA': '$' }[res.country] || '€');
-    saveConfigToCloud({ ...config, lat: res.latitude, long: res.longitude, locationName: res.name + (res.admin1 ? ', ' + res.admin1 : ''), locationSet: true, currency: c });
+  const selectLocation = async (res) => {
+    if (res.mapbox_id) {
+       setSearchLoading(true);
+       try {
+         const retrieveRes = await fetch(`https://api.mapbox.com/search/searchbox/v1/retrieve/${res.mapbox_id}?access_token=${import.meta.env.VITE_MAPBOX_TOKEN}&session_token=${mapboxSession}`);
+         const data = await retrieveRes.json();
+         const feature = data.features[0];
+         const [lng, lat] = feature.geometry.coordinates;
+         const country = feature.properties.context?.country?.name || "Ireland";
+         const c = getCurrencyForCountry(country);
+         saveConfigToCloud({ 
+            ...config, 
+            lat, 
+            long: lng, 
+            locationName: res.name + (res.place_formatted ? ', ' + res.place_formatted : ''), 
+            locationSet: true, 
+            currency: c 
+         });
+         setMapboxSession(""); // Clear session after selection
+       } catch (err) { console.error(err); } finally { setSearchLoading(false); }
+    } else {
+       const c = getCurrencyForCountry(res.country);
+       saveConfigToCloud({ ...config, lat: res.latitude, long: res.longitude, locationName: res.name + (res.admin1 ? ', ' + res.admin1 : ''), locationSet: true, currency: c });
+    }
     setSearchResults([]); setAddressQuery("");
   };
 
@@ -277,7 +315,29 @@ export default function App() {
             <div className="space-y-6 animate-in slide-in-from-right-4">
               <div className="flex bg-[#1a1b23] p-1 rounded-xl border border-slate-800">{['gps', 'search', 'manual'].map(m => (<button key={m} onClick={() => setLocationMode(m)} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${locationMode === m ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-600'}`}>{m}</button>))}</div>
               {locationMode === 'gps' && (<button onClick={detectLocation} className="w-full py-12 bg-indigo-600/10 border-2 border-dashed border-indigo-500/30 rounded-2xl flex flex-col items-center gap-4 transition-all group"><Crosshair className="w-12 h-12 text-indigo-500 group-hover:scale-110 transition-transform" /><span className="text-sm font-bold text-indigo-400 uppercase tracking-widest">{searchLoading ? "Locating..." : "Use Current GPS"}</span></button>)}
-              {locationMode === 'search' && (<div className="relative animate-in slide-in-from-top-2"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" /><input type="text" value={addressQuery} onChange={(e) => searchAddress(e.target.value)} placeholder="Search address, postal code..." className="w-full pl-12 pr-4 py-4 bg-[#1a1b23] border border-slate-600 rounded-2xl text-white focus:border-indigo-500 outline-none transition-all" />{searchResults.length > 0 && (<div className="absolute z-50 mt-2 w-full bg-[#1a1b23] border border-slate-700 rounded-2xl overflow-hidden shadow-2xl">{searchResults.map(r => (<button key={r.id} onClick={() => selectLocation(r)} className="w-full px-5 py-4 text-left hover:bg-indigo-600/20 border-b border-slate-800 last:border-0 flex items-center gap-4 text-white font-bold">{r.name}</button>))}</div>)}</div>)}
+              {locationMode === 'search' && (
+                <div className="relative animate-in slide-in-from-top-2">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                  <input 
+                    type="text" 
+                    value={addressQuery} 
+                    onFocus={startSearchSession}
+                    onChange={(e) => searchAddress(e.target.value)} 
+                    placeholder="Search address, postal code..." 
+                    className="w-full pl-12 pr-4 py-4 bg-[#1a1b23] border border-slate-600 rounded-2xl text-white focus:border-indigo-500 outline-none transition-all" 
+                  />
+                  {searchResults.length > 0 && (
+                    <div className="absolute z-50 mt-2 w-full bg-[#1a1b23] border border-slate-700 rounded-2xl overflow-hidden shadow-2xl">
+                      {searchResults.map(r => (
+                        <button key={r.mapbox_id} onClick={() => selectLocation(r)} className="w-full px-5 py-4 text-left hover:bg-indigo-600/20 border-b border-slate-800 last:border-0 flex flex-col gap-0.5 transition-colors">
+                          <div className="font-bold text-white text-sm">{r.name}</div>
+                          <div className="text-[10px] text-slate-500 font-medium truncate">{r.place_formatted}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               {locationMode === 'manual' && (<div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-2"><div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">Lat</label><input type="number" value={manualCoords.lat} onChange={e => setManualCoords({...manualCoords, lat: parseFloat(e.target.value)})} className="w-full px-4 py-3 bg-[#1a1b23] border border-slate-600 rounded-xl text-white" /></div><div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">Long</label><input type="number" value={manualCoords.long} onChange={e => setManualCoords({...manualCoords, long: parseFloat(e.target.value)})} className="w-full px-4 py-3 bg-[#1a1b23] border border-slate-600 rounded-xl text-white" /></div><button onClick={() => selectLocation({ latitude: manualCoords.lat, longitude: manualCoords.long, name: "Manual" })} className="col-span-2 py-4 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg transition-all active:scale-95">APPLY</button></div>)}
               {config.locationSet && (<button onClick={() => setOnboardingStep(2)} className="w-full py-4 bg-indigo-600 text-white font-black rounded-2xl flex items-center justify-center gap-2 shadow-xl animate-bounce">Next <ArrowRight className="w-5 h-5" /></button>)}
             </div>
@@ -334,7 +394,7 @@ export default function App() {
                 <div className="space-y-4 pb-6 border-b border-slate-800">
                   <div className="flex items-center justify-between"><h4 className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2"><MapPin className="w-3 h-3" /> System Location</h4><div className="flex bg-[#1a1b23] p-0.5 rounded-lg border border-slate-800">{['gps', 'search', 'manual'].map(m => (<button key={m} onClick={() => setLocationMode(m)} className={`px-2 py-1 text-[8px] font-black uppercase rounded-md transition-all ${locationMode === m ? 'bg-indigo-600 text-white' : 'text-slate-600'}`}>{m}</button>))}</div></div>
                   {locationMode === 'gps' && (<button onClick={detectLocation} disabled={searchLoading} className="w-full py-4 bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/30 rounded-xl flex flex-col items-center justify-center gap-2 group transition-all"><Crosshair className={`w-8 h-8 ${searchLoading ? 'animate-spin' : 'group-hover:scale-110'}`} /><span className="text-xs font-black uppercase tracking-widest">{searchLoading ? "Detecting..." : "Use Current GPS"}</span></button>)}
-                  {locationMode === 'search' && (<div className="relative animate-in fade-in slide-in-from-left-2"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" /><input type="text" value={addressQuery} onChange={e => searchAddress(e.target.value)} placeholder="Postal code..." className="w-full pl-10 pr-4 py-2.5 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white focus:border-indigo-500 outline-none" />{searchResults.length > 0 && (<div className="absolute z-50 mt-2 w-full bg-[#1a1b23] border border-slate-700 rounded-xl shadow-2xl overflow-hidden">{searchResults.map(r => (<button key={r.id} onClick={() => selectLocation(r)} className="w-full px-4 py-3 text-left text-sm text-slate-300 hover:bg-indigo-600/20 border-b border-slate-800 last:border-0 transition-colors flex items-center gap-3"><Navigation className="w-3 h-3 text-indigo-400" /><div><div className="font-bold">{r.name}</div><div className="text-[10px] text-slate-500">{r.country}</div></div></button>))}</div>)}</div>)}
+                  {locationMode === 'search' && (<div className="relative animate-in fade-in slide-in-from-left-2"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" /><input type="text" value={addressQuery} onFocus={startSearchSession} onChange={e => searchAddress(e.target.value)} placeholder="Postal code or city..." className="w-full pl-10 pr-4 py-2.5 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white focus:border-indigo-500 outline-none" />{searchResults.length > 0 && (<div className="absolute z-50 mt-2 w-full bg-[#1a1b23] border border-slate-700 rounded-xl shadow-2xl overflow-hidden">{searchResults.map(r => (<button key={r.mapbox_id} onClick={() => selectLocation(r)} className="w-full px-4 py-3 text-left hover:bg-indigo-600/20 border-b border-slate-800 last:border-0 flex flex-col gap-0.5 transition-colors"><div className="font-bold text-sm text-slate-200">{r.name}</div><div className="text-[10px] text-slate-500 truncate">{r.place_formatted}</div></button>))}</div>)}</div>)}
                   {locationMode === 'manual' && (<div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-left-2"><div><label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Latitude</label><input type="number" value={manualCoords.lat} onChange={e => setManualCoords({...manualCoords, lat: parseFloat(e.target.value)})} className="w-full px-3 py-2 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white font-mono" /></div><div><label className="block text-[9px] font-bold text-slate-600 uppercase mb-1">Longitude</label><input type="number" value={manualCoords.long} onChange={e => setManualCoords({...manualCoords, long: parseFloat(e.target.value)})} className="w-full px-3 py-2 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white font-mono" /></div><button onClick={() => selectLocation({ latitude: manualCoords.lat, longitude: manualCoords.long, name: "Manual", country: "User Set" })} className="col-span-2 py-2 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 text-[10px] font-bold rounded-lg border border-indigo-500/30 transition-all uppercase">APPLY</button></div>)}
                   <div className="flex items-center gap-4 text-[10px] text-slate-400 font-mono bg-[#1a1b23] p-2 rounded-lg border border-slate-800/50"><div><span className="text-slate-600 uppercase">Lat:</span> <span className="text-white">{config.lat?.toFixed(4)}</span></div><div><span className="text-slate-600 uppercase">Lon:</span> <span className="text-white">{config.long?.toFixed(4)}</span></div></div>
                 </div>
