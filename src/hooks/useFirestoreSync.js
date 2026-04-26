@@ -3,40 +3,40 @@ import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { sanitizeConfig } from '../utils/sanitize';
 
+const DEMO_CONFIG = {
+  lat: 53.3238,
+  long: -6.3284,
+  eff: 0.80,
+  schemaVersion: 2,
+  locationSet: true,
+  arraysSet: true,
+  locationName: 'Dublin 15, Ireland',
+  strings: [
+    { id: 'east', name: 'East String', count: 11, wattage: 465, azimuth: 90, tilt: 35 },
+    { id: 'west', name: 'West String', count: 9, wattage: 465, azimuth: 270, tilt: 35 }
+  ],
+  effHistory: [],
+  apiEnabled: false,
+  excludedDays: [],
+  acknowledgedOutliers: [],
+  dailyConsumption: 12,
+  batteryCapacity: 0,
+  inverterACRating: null,
+  onMicrogenScheme: true,
+  exportRate: 0.21,
+  importRate: 0.40,
+  currency: "€",
+  showEconomics: true, 
+};
+
 export const useFirestoreSync = (user, appId) => {
   const isDemo = user?.uid === 'demo-user';
   
-  const DEMO_CONFIG = {
-    lat: 53.3238,
-    long: -6.3284,
-    eff: 0.80,
-    schemaVersion: 2,
-    locationSet: true,
-    arraysSet: true,
-    locationName: 'Dublin 15, Ireland',
-    strings: [
-      { id: 'east', name: 'East String', count: 11, wattage: 465, azimuth: 90, tilt: 35 },
-      { id: 'west', name: 'West String', count: 9, wattage: 465, azimuth: 270, tilt: 35 }
-    ],
-    effHistory: [],
-    apiEnabled: false,
-    excludedDays: [],
-    acknowledgedOutliers: [],
-    dailyConsumption: 12,
-    batteryCapacity: 0,
-    inverterACRating: null,
-    onMicrogenScheme: true,
-    exportRate: 0.21,
-    importRate: 0.40,
-    currency: "€",
-    showEconomics: true, 
-  };
-
   const [dbSyncing, setDbSyncing] = useState(false);
   const [dbStatus, setDbStatus] = useState(isDemo ? "Demo Mode" : "Idle");
   const [lastSynced, setLastSynced] = useState(null);
 
-  const [config, setConfig] = useState({
+  const [config, setConfig] = useState(isDemo ? DEMO_CONFIG : {
     lat: null,
     long: null,
     eff: 0.85,
@@ -59,8 +59,15 @@ export const useFirestoreSync = (user, appId) => {
     showEconomics: false,
   });
 
-  // Handle Demo config reset on user change
-  useEffect(() => {
+  const [actuals, setActuals] = useState(isDemo ? {
+    "2026-04-26": 24.5,
+    "2026-04-25": 18.2
+  } : {});
+
+  // Adjust state when user changes (e.g. toggling demo mode)
+  const [prevUserId, setPrevUserId] = useState(user?.uid);
+  if (user?.uid !== prevUserId) {
+    setPrevUserId(user?.uid);
     if (isDemo) {
       setConfig(DEMO_CONFIG);
       setActuals({
@@ -69,9 +76,9 @@ export const useFirestoreSync = (user, appId) => {
       });
       setDbStatus("Demo Mode");
     }
-  }, [isDemo]);
+  }
   
-  const [snapshots, setSnapshots] = useState(isDemo ? {} : {});
+  const [snapshots, setSnapshots] = useState({});
 
   useEffect(() => {
     if (!user || isDemo) return;

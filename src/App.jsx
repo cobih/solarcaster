@@ -279,7 +279,6 @@ export default function App() {
   const removeString = (id) => saveConfigToCloud({ ...config, strings: config.strings.filter(s => s.id !== id) });
   const updateString = (id, f, v) => saveConfigToCloud({ ...config, strings: config.strings.map(s => s.id === id ? { ...s, [f]: v } : s) });
   const excludeDay = (isoDate) => saveConfigToCloud({ ...config, excludedDays: [...(config.excludedDays || []), isoDate] });
-  const acknowledgeOutlier = (isoDate) => saveConfigToCloud({ ...config, acknowledgedOutliers: [...(config.acknowledgedOutliers || []), isoDate] });
 
   const getApplianceAdvice = () => {
     if (dailyTotals.length === 0 || data.length === 0) return null;
