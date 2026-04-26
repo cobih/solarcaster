@@ -7,7 +7,7 @@ import {
   Sun, Calendar, Settings, AlertCircle, Info, Target, Calculator, Zap, Cloud,
   LogOut, LogIn, User, Plus, Trash2, Activity,
   MapPin, Search, Navigation, LayoutDashboard, TrendingUp, History, CloudRain,
-  Crosshair, ChevronDown, ChevronUp, MessageSquare, ArrowRight, Lock
+  Crosshair, ChevronDown, ChevronUp, MessageSquare, ArrowRight, Lock, Home
 } from 'lucide-react';
 
 import { useSolarAuth } from './hooks/useSolarAuth';
@@ -27,7 +27,8 @@ export default function App() {
   const [isDemo, setIsDemo] = useState(false);
 
   const { 
-    config, actuals, snapshots, dbSyncing, 
+    config, actuals, snapshots, systems, currentSystemId, setCurrentSystemId, addNewSystem,
+    dbSyncing, dbStatus, lastSynced, 
     saveConfigToCloud, saveActualToCloud, saveSnapshotToCloud, publishForecast 
   } = useFirestoreSync(isDemo ? { uid: 'demo-user', email: 'demo@solarcaster.ai' } : user, appId);
   
@@ -36,6 +37,7 @@ export default function App() {
   } = useSolarPhysics(config, dbSyncing);
 
   const [showConfig, setShowConfig] = useState(false);
+  const [showSwitcher, setShowSwitcher] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackText, setFeedbackText] = useState("");
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
@@ -126,7 +128,7 @@ export default function App() {
   };
 
   const todayForecast = dailyTotals.find(d => d.dayOffset === 0) || { yield: 0, p10: 0, p90: 0, eastYield: 0, westYield: 0, dayLabel: '', isoDate: '', strings: {}, economics: { selfConsumed: 0, exported: 0, imported: 0, clipped: 0 } };
-  const tomorrowForecast = dailyTotals.find(d => d.dayOffset === 1) || { yield: 0, eastYield: 0, westYield: 0, economics: { selfConsumed: 0, exported: 0 } };
+  const tomorrowForecast = dailyTotals.find(d => d.dayOffset === 1) || { yield: 0, p10: 0, p90: 0, eastYield: 0, westYield: 0, economics: { selfConsumed: 0, exported: 0 } };
 
   const todaySavings = (todayForecast.economics?.selfConsumed * config.importRate) + (todayForecast.economics?.exported * config.exportRate);
   const tomorrowSavings = (tomorrowForecast.economics?.selfConsumed * config.importRate) + (tomorrowForecast.economics?.exported * config.exportRate);
@@ -349,11 +351,11 @@ export default function App() {
           </div>
           {visibleSeries.uncertainty && (
             <div className="pt-2 border-t border-slate-800 space-y-2">
-              <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Likely Range</div>
+              <div className="text-[8px] font-black text-solar-slate-500 uppercase tracking-widest mb-1">Likely Range</div>
               <div className="space-y-1">
-                <div className="flex justify-between gap-4"><span className="text-emerald-400 font-bold uppercase text-[8px]">Optimistic:</span><span className="text-white font-mono">{p.p90} kW</span></div>
-                <div className="flex justify-between gap-4"><span className="text-indigo-300 font-bold uppercase text-[8px]">Most Likely:</span><span className="text-white font-mono font-bold">{p.p50} kW</span></div>
-                <div className="flex justify-between gap-4"><span className="text-amber-500 font-bold uppercase text-[8px]">Conservative:</span><span className="text-white font-mono">{p.p10} kW</span></div>
+                <div className="flex justify-between gap-4"><span className="text-solar-emerald font-bold uppercase text-[8px]">Optimistic:</span><span className="text-white font-mono">{p.p90} kW</span></div>
+                <div className="flex justify-between gap-4"><span className="text-solar-indigo font-bold uppercase text-[8px]">Most Likely:</span><span className="text-white font-mono font-bold">{p.p50} kW</span></div>
+                <div className="flex justify-between gap-4"><span className="text-solar-amber font-bold uppercase text-[8px]">Conservative:</span><span className="text-white font-mono">{p.p10} kW</span></div>
               </div>
             </div>
           )}
@@ -362,6 +364,15 @@ export default function App() {
       );
     }
     return null;
+  };
+
+  const handleAddSystem = async () => {
+    const name = prompt("Enter property name (e.g. Holiday Home):", "New Property");
+    if (name) {
+      await addNewSystem(name);
+      setShowSwitcher(false);
+      setShowConfig(true); 
+    }
   };
 
   if (authLoading) return <div className="flex items-center justify-center h-screen bg-solar-bg text-white"><MapPin className="w-12 h-12 text-indigo-500 animate-pulse" /></div>;
@@ -441,7 +452,50 @@ export default function App() {
       )}
       <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-6">
         <div className="flex justify-between items-center gap-4">
-          <div><h1 className="text-xl md:text-2xl font-bold text-white flex items-center gap-2">Solarcaster<Cloud className="w-4 h-4 md:w-5 md:h-5 text-emerald-400 ml-2" aria-label="Cloud sync active" /></h1><p className="text-slate-400 text-[10px] md:text-sm mt-1 flex items-center gap-1">{isDemo ? "📍 Demo System — Dublin 15, Ireland" : <><MapPin className="w-3 h-3 text-indigo-400" aria-hidden="true" /> {config.locationName || `${config.lat?.toFixed(2)}°N`}</>}</p></div>
+          <div className="relative">
+            <h1 className="text-xl md:text-2xl font-bold text-white flex items-center gap-2">Solarcaster<Cloud className="w-4 h-4 md:w-5 md:h-5 text-emerald-400 ml-2" aria-label="Cloud sync active" /></h1>
+            <button 
+              onClick={() => setShowSwitcher(!showSwitcher)}
+              className="text-slate-400 text-[10px] md:text-sm mt-1 flex items-center gap-1 hover:text-white transition-colors group"
+            >
+              <MapPin className="w-3 h-3 text-indigo-400" aria-hidden="true" /> 
+              {isDemo ? "📍 Demo System" : (config.locationName || "My Home")}
+              <ChevronDown className={`w-3 h-3 transition-transform ${showSwitcher ? 'rotate-180' : ''}`} />
+            </button>
+
+            {showSwitcher && (
+              <div className="absolute top-full left-0 mt-2 w-64 bg-solar-card border border-slate-700 rounded-xl shadow-2xl z-[70] animate-in fade-in slide-in-from-top-2 overflow-hidden">
+                <div className="p-3 border-b border-slate-800 bg-solar-bg/50">
+                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">My Properties</p>
+                </div>
+                <div className="max-h-64 overflow-y-auto custom-scrollbar">
+                  {systems.map(s => (
+                    <button 
+                      key={s.id} 
+                      onClick={() => { setCurrentSystemId(s.id); setShowSwitcher(false); }}
+                      className={`w-full p-4 text-left hover:bg-indigo-600/10 flex items-center gap-3 transition-colors border-b border-slate-800/50 last:border-0 ${currentSystemId === s.id ? 'bg-indigo-600/5 border-l-2 border-l-indigo-500' : ''}`}
+                    >
+                      <Home className={`w-4 h-4 ${currentSystemId === s.id ? 'text-indigo-400' : 'text-slate-600'}`} />
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-sm font-bold truncate ${currentSystemId === s.id ? 'text-white' : 'text-slate-400'}`}>{s.locationName}</p>
+                        {s.id === 'demo' && <p className="text-[8px] text-amber-500 font-bold uppercase">Guest Mode</p>}
+                      </div>
+                      {currentSystemId === s.id && <Activity className="w-3 h-3 text-indigo-500 animate-pulse" />}
+                    </button>
+                  ))}
+                </div>
+                {!isDemo && (
+                  <button 
+                    onClick={handleAddSystem}
+                    className="w-full p-4 text-left hover:bg-emerald-600/10 flex items-center gap-3 text-emerald-400 transition-colors border-t border-slate-800 bg-solar-bg/30"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span className="text-xs font-black uppercase tracking-widest">Add New Property</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
           <div className="flex items-center gap-2 md:gap-3">
             <button onClick={() => isDemo ? setIsDemo(false) : setShowConfig(!showConfig)} className={`relative p-2 md:px-4 md:py-2 bg-solar-card border ${canApply && !isDemo ? 'border-amber-500 text-amber-400' : 'border-slate-700 text-slate-300'} rounded-lg flex items-center gap-2 shadow-sm transition-all hover:bg-slate-800`}>{isDemo ? <Lock className="w-4 h-4" /> : (canApply ? <Activity className="w-4 h-4 animate-pulse" /> : <Settings className="w-4 h-4" />)}<span className="hidden md:inline">{isDemo ? "Sign In" : "Settings"}</span>{canApply && !isDemo && <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full border-2 border-solar-bg"></span>}</button>
             <button onClick={() => setShowFeedback(true)} className="p-2 md:px-4 md:py-2 bg-indigo-600/10 border border-indigo-500/30 text-indigo-400 rounded-lg flex items-center gap-2 shadow-sm hover:bg-indigo-600/20 transition-all"><MessageSquare className="w-4 h-4" /></button>
@@ -588,14 +642,14 @@ export default function App() {
                      {adviceText && (<div className="bg-indigo-500/10 border border-indigo-500/20 p-3 rounded-xl flex items-center gap-3"><Zap className="w-4 h-4 text-indigo-400 shrink-0" /><p className="text-[11px] font-bold text-slate-200 leading-tight">⚡ {adviceText}</p></div>)}
                      <div className="space-y-3"><div className="flex justify-between items-end px-1"><span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Energy Path</span><span className="text-[10px] font-bold text-slate-400">Generation: {todayForecast.yield.toFixed(1)} kWh</span></div><div className="h-4 w-full bg-slate-800 rounded-full overflow-hidden flex border border-slate-700/50 shadow-inner"><div title="Home" className="h-full bg-emerald-500 transition-all duration-1000 relative group" style={{ width: `${(todayForecast.economics?.selfConsumed / (todayForecast.yield || 1)) * 100}%` }}><div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"></div></div><div title="Export" className="h-full bg-indigo-500 transition-all duration-1000 border-l border-white/10" style={{ width: `${(todayForecast.economics?.exported / (todayForecast.yield || 1)) * 100}%` }}></div><div title="Clipped" className="h-full bg-amber-600 transition-all duration-1000 border-l border-white/10" style={{ width: `${(todayForecast.economics?.clipped / (todayForecast.yield || 1)) * 100}%` }}></div></div><div className="flex gap-4 justify-center"><div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-500"></div><span className="text-[9px] font-bold text-slate-500 uppercase">Home</span></div><div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-indigo-500"></div><span className="text-[9px] font-bold text-slate-500 uppercase">Grid Export</span></div>{todayForecast.economics?.clipped > 0 && <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-amber-600"></div><span className="text-[9px] font-bold text-slate-500 uppercase">Clipped</span></div>}</div></div>
                      <div className="grid grid-cols-1 md:grid-cols-11 items-center gap-2"><div className="md:col-span-5 p-5 bg-solar-bg rounded-2xl border border-emerald-500/10 flex flex-col justify-between h-full relative overflow-hidden"><div className="absolute top-0 right-0 p-4 opacity-5"><Zap className="w-16 h-14 text-emerald-400" /></div><div><div className="text-[9px] font-black text-emerald-500/70 uppercase tracking-[0.2em] mb-3">1. Household Savings</div><div className="text-3xl font-black text-white mb-1">{config.currency}{(todayForecast.economics?.selfConsumed * config.importRate).toFixed(2)}</div><div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{todayForecast.economics?.selfConsumed.toFixed(1)} kWh used by home</div></div></div><div className="hidden md:flex md:col-span-1 justify-center text-slate-600 font-black text-2xl">+</div><div className="md:col-span-5 p-5 bg-solar-bg rounded-2xl border border-indigo-500/10 flex flex-col justify-between h-full relative overflow-hidden"><div className="absolute top-0 right-0 p-4 opacity-5"><Navigation className="w-16 h-14 text-indigo-400" /></div><div><div className="text-[9px] font-black text-indigo-400/70 uppercase tracking-[0.2em] mb-3">2. Export Credits</div><div className="text-3xl font-black text-white mb-1">{config.currency}{(todayForecast.economics?.exported * config.exportRate).toFixed(2)}</div><div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{todayForecast.economics?.exported.toFixed(1)} kWh sent to grid</div></div>{!config.onMicrogenScheme && <div className="mt-4 pt-3 border-t border-slate-800/50"><p className="text-[9px] text-amber-500/80 italic font-medium leading-tight">Enable export in settings to track this credit.</p></div>}</div></div>
-                     <div className="pt-6 border-t border-slate-800/80"><div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-900/40 p-5 rounded-2xl border border-slate-800/50"><div className="flex items-center gap-4"><div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-red-400/50"><CloudRain className="w-5 h-5" /></div><div><h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Grid Import Needed</h4><p className="text-xs font-bold text-slate-300">{todayForecast.economics?.imported.toFixed(1)} kWh still needed from grid</p></div></div><div className="text-right"><div className="text-[9px] text-slate-600 uppercase font-black tracking-tighter">Est. Cost</div><div className="text-xl font-black text-slate-400">{config.currency}{(todayForecast.economics?.imported * config.importRate).toFixed(2)}</div></div></div></div>
+                     <div className="pt-6 border-t border-slate-800/80"><div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-solar-bg/40 p-5 rounded-2xl border border-slate-800/50"><div className="flex items-center gap-4"><div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-red-400/50"><CloudRain className="w-5 h-5" /></div><div><h4 className="text-[10px] font-black text-solar-slate-500 uppercase tracking-widest">Grid Import Needed</h4><p className="text-xs font-bold text-slate-300">{todayForecast.economics?.imported.toFixed(1)} kWh still needed from grid</p></div></div><div className="text-right"><div className="text-[9px] text-slate-600 uppercase font-black tracking-tighter">Est. Cost</div><div className="text-xl font-black text-slate-400">{config.currency}{(todayForecast.economics?.imported * config.importRate).toFixed(2)}</div></div></div></div>
                      <div className="flex items-center gap-2 text-[8px] text-slate-600 font-bold uppercase tracking-widest bg-black/20 p-2.5 rounded-lg border border-slate-800/50"><Info className="w-3 h-3 shrink-0" /><span>Based on a steady baseline load.</span></div>
                   </div>
                )}
             </div>
 
             <div className="bg-solar-card p-4 md:p-6 rounded-2xl border border-slate-700/50 shadow-lg">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6"><h2 className="text-lg font-semibold text-white flex items-center gap-2"><Activity className="w-5 h-5 text-indigo-400" /> Hourly Profile</h2><div className="flex flex-wrap gap-2">{[ { key: 'total', label: 'Total', color: '#fde047' }, { key: 'energy', label: 'Energy', color: '#818cf8' }, { key: 'strings', label: 'Strings', color: '#f59e0b' }, { key: 'uncertainty', label: 'Likely Range', color: '#6366f1' } ].map(btn => (<button key={btn.key} onClick={() => toggleSeries(btn.key)} className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase border transition-all flex items-center gap-2 ${visibleSeries[btn.key] ? 'bg-slate-800 border-slate-600 text-white shadow-inner' : 'bg-transparent border-slate-800 text-slate-600'}`}><div className={`w-1.5 h-1.5 rounded-full transition-all ${visibleSeries[btn.key] ? 'scale-100' : 'scale-50 opacity-40'}`} style={{ backgroundColor: btn.color }}></div>{btn.label}</button>))}</div></div>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6"><h2 className="text-lg font-semibold text-white flex items-center gap-2"><Activity className="w-5 h-5 text-indigo-400" /> Hourly Profile</h2><div className="flex flex-wrap gap-2">{[ { key: 'total', label: 'Total', color: '#fde047' }, { key: 'energy', label: 'Energy', color: '#818cf8' }, { key: 'strings', label: 'Strings', color: '#f59e0b' }, { key: 'uncertainty', label: 'Likely Range', color: '#6366f1' } ].map(btn => (<button key={btn.key} onClick={() => toggleSeries(btn.key)} className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase border transition-all flex items-center gap-2 ${visibleSeries[btn.key] ? 'bg-solar-card border-slate-600 text-white shadow-inner' : 'bg-transparent border-slate-800 text-slate-600'}`}><div className={`w-1.5 h-1.5 rounded-full transition-all ${visibleSeries[btn.key] ? 'scale-100' : 'scale-50 opacity-40'}`} style={{ backgroundColor: btn.color }}></div>{btn.label}</button>))}</div></div>
               <div className="h-[250px] w-full"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={selectedDayData} margin={chartMargins}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" /><XAxis dataKey="timeLabel" interval={isMobile ? 5 : 3} tickFormatter={(val) => isMobile ? val.split(':')[0] : val} stroke="#64748b" fontSize={10} axisLine={false} tickLine={false} /><YAxis stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} label={isMobile ? { value: 'kW', position: 'insideTopLeft', offset: 0, dy: -20, dx: 10, fill: '#64748b', fontSize: 10, fontWeight: 'bold' } : { value: 'POWER (kW)', angle: -90, position: 'insideLeft', offset: -30, dy: 0, fontSize: 8, fontWeight: 'bold', fill: '#64748b' }} /><YAxis yAxisId="right" orientation="right" stroke="#818cf8" fontSize={10} axisLine={false} tickLine={false} unit="kWh" label={isMobile ? { value: 'kWh', position: 'insideTopRight', offset: 0, dy: -20, dx: -10, fill: '#818cf8', fontSize: 10, fontWeight: 'bold' } : { value: 'ENERGY (kWh)', angle: 90, position: 'insideRight', offset: -30, dy: 0, fontSize: 8, fontWeight: 'bold', fill: '#64748b' }} /><Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} content={renderTooltipContent} />{visibleSeries.uncertainty && <Area type="monotone" dataKey="pRange" stroke="none" fill="#fde047" fillOpacity={0.3} name="Likely Range" />}{visibleSeries.total && <Area type="monotone" dataKey="total" name="Total Power" stroke="#fde047" fill="#fde047" fillOpacity={0.1} strokeWidth={2} />}{visibleSeries.strings && (config.strings || []).map((s, idx) => <Line key={s.id} type="monotone" dataKey={`stringPowers.${s.id}`} name={s.name} stroke={STRING_COLORS[idx % STRING_COLORS.length]} strokeWidth={1} dot={false} strokeDasharray="5 5" />)}{visibleSeries.energy && <Line yAxisId="right" type="monotone" dataKey="cumulativeYield" name="Energy" stroke="#818cf8" strokeWidth={3} dot={false} />}{currentHourTick && <ReferenceLine x={currentHourTick} stroke="#818cf8" strokeDasharray="4 4" />}</ComposedChart></ResponsiveContainer></div>
             </div>
 

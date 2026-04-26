@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { useState, useEffect, useCallback } from 'react';
+import { doc, setDoc, onSnapshot, collection, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { sanitizeConfig } from '../utils/sanitize';
 
@@ -32,6 +32,8 @@ const DEMO_CONFIG = {
 export const useFirestoreSync = (user, appId) => {
   const isDemo = user?.uid === 'demo-user';
   
+  const [systems, setSystems] = useState(isDemo ? [{ id: 'demo', locationName: 'Dublin 15 (Demo)' }] : []);
+  const [currentSystemId, setCurrentSystemId] = useState(isDemo ? 'demo' : 'default');
   const [dbSyncing, setDbSyncing] = useState(false);
   const [dbStatus, setDbStatus] = useState(isDemo ? "Demo Mode" : "Idle");
   const [lastSynced, setLastSynced] = useState(null);
@@ -64,29 +66,68 @@ export const useFirestoreSync = (user, appId) => {
     "2026-04-25": 18.2
   } : {});
 
-  // Adjust state when user changes (e.g. toggling demo mode)
-  const [prevUserId, setPrevUserId] = useState(user?.uid);
-  if (user?.uid !== prevUserId) {
-    setPrevUserId(user?.uid);
-    if (isDemo) {
-      setConfig(DEMO_CONFIG);
-      setActuals({
-        "2026-04-26": 24.5,
-        "2026-04-25": 18.2
-      });
-      setDbStatus("Demo Mode");
-    }
-  }
-  
   const [snapshots, setSnapshots] = useState({});
 
+  // --- 1. SYSTEM DISCOVERY & MIGRATION ---
   useEffect(() => {
     if (!user || isDemo) return;
 
-    const statusTimer = setTimeout(() => setDbStatus("Connecting..."), 0);
+    const systemsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'systems');
+    const unsubSystems = onSnapshot(systemsRef, async (snap) => {
+      if (snap.empty) {
+        // Check for legacy data
+        const legacyRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'config');
+        const legacySnap = await getDoc(legacyRef);
+        
+        if (legacySnap.exists()) {
+          // MIGRATE: Copy legacy data to default system
+          const legacyData = legacySnap.data();
+          const defaultSystemRef = doc(db, 'artifacts', appId, 'users', user.uid, 'systems', 'default');
+          const defaultDataRef = doc(db, 'artifacts', appId, 'users', user.uid, 'systems', 'default', 'solar_app', 'config');
+          
+          await setDoc(defaultSystemRef, { 
+            id: 'default', 
+            locationName: legacyData.locationName || "My Home",
+            createdAt: new Date().toISOString()
+          });
+          
+          // Move documents
+          const legacyActualsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'actuals');
+          const legacySnapshotsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'snapshots');
+          
+          const actualsSnap = await getDoc(legacyActualsRef);
+          const snapshotsSnap = await getDoc(legacySnapshotsRef);
+
+          await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'systems', 'default', 'solar_app', 'config'), legacyData);
+          if (actualsSnap.exists()) await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'systems', 'default', 'solar_app', 'actuals'), actualsSnap.data());
+          if (snapshotsSnap.exists()) await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'systems', 'default', 'solar_app', 'snapshots'), snapshotsSnap.data());
+          
+          setSystems([{ id: 'default', locationName: legacyData.locationName || "My Home" }]);
+        } else {
+          // Initialize fresh default if no legacy data
+          const defaultSystemRef = doc(db, 'artifacts', appId, 'users', user.uid, 'systems', 'default');
+          await setDoc(defaultSystemRef, { id: 'default', locationName: "My Home", createdAt: new Date().toISOString() });
+          setSystems([{ id: 'default', locationName: "My Home" }]);
+        }
+      } else {
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setSystems(list);
+      }
+    });
+
+    return () => unsubSystems();
+  }, [user, appId, isDemo]);
+
+  // --- 2. DATA SYNC FOR SELECTED SYSTEM ---
+  useEffect(() => {
+    if (!user || isDemo || !currentSystemId) return;
+
+    setDbSyncing(true);
+    setDbStatus("Connecting...");
     const timeoutId = setTimeout(() => setDbSyncing(false), 5000);
 
-    const configRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'config');
+    const basePath = ['artifacts', appId, 'users', user.uid, 'systems', currentSystemId, 'solar_app'];
+    const configRef = doc(db, ...basePath, 'config');
     const unsubConfig = onSnapshot(configRef, (docSnap) => {
       clearTimeout(timeoutId);
       if (docSnap.exists()) {
@@ -109,40 +150,41 @@ export const useFirestoreSync = (user, appId) => {
            migrated.strings = data.strings.map(s => ({ ...s, wattage: s.wattage || 465 }));
         }
         setConfig(migrated);
+      } else {
+        // Reset to default if config doesn't exist yet (new property flow)
+        setConfig({
+          lat: null, long: null, eff: 0.85, schemaVersion: 2,
+          locationSet: false, arraysSet: false, locationName: "",
+          strings: [], effHistory: [], apiEnabled: false,
+          excludedDays: [], acknowledgedOutliers: [],
+          dailyConsumption: 12, batteryCapacity: 0, inverterACRating: null,
+          onMicrogenScheme: false, exportRate: 0.21, importRate: 0.40,
+          currency: "€", showEconomics: false
+        });
       }
       setDbSyncing(false);
+      setDbStatus("Connected");
     }, (err) => {
       console.error("Config Sync Error:", err);
       setDbSyncing(false);
     });
 
-    const actualsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'actuals');
+    const actualsRef = doc(db, ...basePath, 'actuals');
     const unsubActuals = onSnapshot(actualsRef, (docSnap) => {
       if (docSnap.exists()) {
         const rawActuals = docSnap.data();
-        const migratedActuals = { ...rawActuals };
-        let needsUpdate = false;
-        const now = new Date();
-        for (let i = -14; i <= 7; i++) {
-          const d = new Date(now);
-          d.setDate(d.getDate() + i);
-          const oldKey = d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-          const newKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-          if (rawActuals[oldKey] !== undefined && !rawActuals[newKey]) {
-            migratedActuals[newKey] = rawActuals[oldKey];
-            delete migratedActuals[oldKey];
-            needsUpdate = true;
-          }
-        }
-        if (needsUpdate) { setDoc(actualsRef, migratedActuals); }
-        setActuals(migratedActuals);
+        setActuals(rawActuals);
+      } else {
+        setActuals({});
       }
     }, (err) => console.error("Actuals Sync Error:", err));
 
-    const snapshotsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'snapshots');
+    const snapshotsRef = doc(db, ...basePath, 'snapshots');
     const unsubSnapshots = onSnapshot(snapshotsRef, (docSnap) => {
       if (docSnap.exists()) {
         setSnapshots(docSnap.data());
+      } else {
+        setSnapshots({});
       }
     }, (err) => console.error("Snapshots Sync Error:", err));
 
@@ -151,9 +193,8 @@ export const useFirestoreSync = (user, appId) => {
       unsubActuals();
       unsubSnapshots();
       clearTimeout(timeoutId);
-      clearTimeout(statusTimer);
     };
-  }, [user, appId, isDemo]);
+  }, [user, appId, isDemo, currentSystemId]);
 
   const saveConfigToCloud = async (newConfig) => {
     const cleanConfig = sanitizeConfig(newConfig);
@@ -166,12 +207,19 @@ export const useFirestoreSync = (user, appId) => {
       cleanConfig.effHistory = [historyEntry, ...(config.effHistory || [])].slice(0, 50);
     }
     setConfig(cleanConfig);
-    if (!user || isDemo) return;
-    setDbStatus("Saving Config...");
+    if (!user || isDemo || !currentSystemId) return;
+    setDbStatus("Saving...");
     try {
-      const configRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'config');
+      const configRef = doc(db, 'artifacts', appId, 'users', user.uid, 'systems', currentSystemId, 'solar_app', 'config');
       await setDoc(configRef, cleanConfig, { merge: true });
-      setDbStatus("Config Saved");
+      
+      // Update system metadata if locationName changed
+      if (newConfig.locationName && newConfig.locationName !== config.locationName) {
+        const systemRef = doc(db, 'artifacts', appId, 'users', user.uid, 'systems', currentSystemId);
+        await setDoc(systemRef, { locationName: newConfig.locationName }, { merge: true });
+      }
+      
+      setDbStatus("Saved");
       setLastSynced(new Date().toLocaleTimeString());
     } catch (err) {
       console.error("Failed to save config:", err);
@@ -182,12 +230,12 @@ export const useFirestoreSync = (user, appId) => {
   const saveActualToCloud = async (dayLabel, value) => {
     const newVal = { ...actuals, [dayLabel]: value };
     setActuals(newVal);
-    if (!user || isDemo) return;
-    setDbStatus(`Saving Actual: ${dayLabel}`);
+    if (!user || isDemo || !currentSystemId) return;
+    setDbStatus(`Saving...`);
     try {
-      const actualsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'actuals');
+      const actualsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'systems', currentSystemId, 'solar_app', 'actuals');
       await setDoc(actualsRef, { [dayLabel]: value }, { merge: true });
-      setDbStatus("Actual Saved");
+      setDbStatus("Saved");
       setLastSynced(new Date().toLocaleTimeString());
     } catch (err) {
       console.error("Failed to save actuals:", err);
@@ -198,13 +246,26 @@ export const useFirestoreSync = (user, appId) => {
   const saveSnapshotToCloud = async (isoDate, modelledYield) => {
     const newVal = { ...snapshots, [isoDate]: modelledYield };
     setSnapshots(newVal);
-    if (!user || isDemo) return;
+    if (!user || isDemo || !currentSystemId) return;
     try {
-      const snapshotsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'solar_app', 'snapshots');
+      const snapshotsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'systems', currentSystemId, 'solar_app', 'snapshots');
       await setDoc(snapshotsRef, { [isoDate]: modelledYield }, { merge: true });
     } catch (err) {
       console.error("Failed to save snapshot:", err);
     }
+  };
+
+  const addNewSystem = async (name) => {
+    if (!user || isDemo) return;
+    const newId = 'sys_' + Date.now();
+    const systemRef = doc(db, 'artifacts', appId, 'users', user.uid, 'systems', newId);
+    await setDoc(systemRef, { 
+      id: newId, 
+      locationName: name, 
+      createdAt: new Date().toISOString() 
+    });
+    setCurrentSystemId(newId);
+    return newId;
   };
 
   const publishForecast = async (dailyTotals, hourlyData) => {
@@ -218,7 +279,7 @@ export const useFirestoreSync = (user, appId) => {
       }));
       const hourly = (hourlyData || []).map(h => ({
         time: h.date.toISOString(),
-        kw: h.p50, // Backwards compatibility
+        kw: h.p50,
         p10: h.p10,
         p50: h.p50,
         p90: h.p90
@@ -239,12 +300,16 @@ export const useFirestoreSync = (user, appId) => {
     config, 
     actuals, 
     snapshots,
+    systems,
+    currentSystemId,
+    setCurrentSystemId,
     dbSyncing, 
     dbStatus, 
     lastSynced, 
     saveConfigToCloud, 
     saveActualToCloud,
     saveSnapshotToCloud,
+    addNewSystem,
     publishForecast
   };
 };
