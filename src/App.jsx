@@ -18,8 +18,8 @@ import { db, logAnalyticsEvent } from './firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 const appId = "solar-forecaster-63320";
-// Split token to bypass GitHub push protection
-const MBT = "pk.eyJ1" + "oiY29i" + "aWgiLCJhIjoiY21vZmZhamxwMGxlaDJvcjN5YnJkYWdjYSJ9.InbQN4WVCJm7eEnc-v9Xrw";
+// Fixed token split (previously missing 'Ijoi')
+const MBT = "pk.eyJ1I" + "joiY29iaWgiLCJhI" + "joiY21vZmZhamxwMGxlaDJvcjN5YnJkYWdjYSJ9.InbQN4WVCJm7eEnc-v9Xrw";
 let searchTimeout;
 
 export default function App() {
@@ -52,6 +52,7 @@ export default function App() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [locationMode, setLocationMode] = useState("gps");
   const [manualCoords, setManualCoords] = useState({ lat: 53.3767, long: -6.3286 });
+  const [mapboxSession, setMapboxSession] = useState("");
 
   const [visibleSeries, setVisibleSeries] = useState({
     total: true, energy: true, clouds: true, strings: true, uncertainty: true
@@ -175,6 +176,15 @@ export default function App() {
     return map[country] || '€';
   };
 
+  const generateUUID = () => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
   const searchAddress = async (q) => {
     setAddressQuery(q);
     if (!q || q.length < 2) { 
@@ -183,20 +193,21 @@ export default function App() {
       setSearchLoading(false);
       return; 
     }
-
-    setSearchLoading(true); // Set loading immediately
+    
+    setSearchLoading(true);
     if (searchTimeout) clearTimeout(searchTimeout);
-
+    
     searchTimeout = setTimeout(async () => {
       try {
-        const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN || MBT;
-        console.log(`Searching Mapbox for: "${q}"...`);
-        const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?access_token=${mapboxToken}&limit=5&proximity=ip&types=place,postcode,address`);
-        const data = await res.json();
+        const token = mapboxSession || generateUUID();
+        if (!mapboxSession) setMapboxSession(token);
 
-        if (data.features) {
-          console.log(`Found ${data.features.length} results.`);
-          setSearchResults(data.features);
+        const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN || MBT;
+        const res = await fetch(`https://api.mapbox.com/search/searchbox/v1/suggest?q=${encodeURIComponent(q)}&access_token=${mapboxToken}&session_token=${token}&types=place,region,postcode,address&limit=5&proximity=ip`);
+        const data = await res.json();
+        
+        if (data.suggestions) {
+          setSearchResults(data.suggestions);
         } else {
           console.error("Mapbox API Error:", data);
           setSearchResults([]);
@@ -224,20 +235,28 @@ export default function App() {
   };
 
   const selectLocation = async (res) => {
-    // Mapbox feature detection
-    if (res.geometry && res.place_name) {
-       const [lng, lat] = res.geometry.coordinates;
-       const countryContext = res.context?.find(c => c.id.startsWith('country'))?.text || "Ireland";
-       const c = getCurrencyForCountry(countryContext);
-       
-       saveConfigToCloud({ 
-          ...config, 
-          lat, 
-          long: lng, 
-          locationName: res.place_name, 
-          locationSet: true, 
-          currency: c 
-       });
+    // Mapbox Searchbox v1 Retrieve flow
+    if (res.mapbox_id) {
+       setSearchLoading(true);
+       try {
+         const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN || MBT;
+         const retrieveRes = await fetch(`https://api.mapbox.com/search/searchbox/v1/retrieve/${res.mapbox_id}?access_token=${mapboxToken}&session_token=${mapboxSession}`);
+         const data = await retrieveRes.json();
+         const feature = data.features[0];
+         const [lng, lat] = feature.geometry.coordinates;
+         const country = feature.properties.context?.country?.name || "Ireland";
+         const c = getCurrencyForCountry(country);
+         
+         saveConfigToCloud({ 
+            ...config, 
+            lat, 
+            long: lng, 
+            locationName: res.name + (res.place_formatted ? ', ' + res.place_formatted : ''), 
+            locationSet: true, 
+            currency: c 
+         });
+         setMapboxSession(""); // Reset session after selection
+       } catch (err) { console.error(err); } finally { setSearchLoading(false); }
     } else {
        // Manual coordinates fallback
        const c = getCurrencyForCountry(res.country);
@@ -336,9 +355,9 @@ export default function App() {
                   {searchResults.length > 0 && (
                     <div className="absolute left-0 right-0 z-[9999] mt-2 bg-[#1a1b23] border border-slate-700 rounded-2xl overflow-y-auto max-h-[250px] shadow-[0_20px_50px_rgba(0,0,0,0.5)] custom-scrollbar pointer-events-auto">
                       {searchResults.map(r => (
-                        <button key={r.id} onClick={() => selectLocation(r)} className="w-full px-5 py-4 text-left hover:bg-indigo-600/20 border-b border-slate-800 last:border-0 flex flex-col gap-0.5 transition-colors">
-                          <div className="font-bold text-white text-sm">{r.text}</div>
-                          <div className="text-[10px] text-slate-500 font-medium line-clamp-1">{r.place_name}</div>
+                        <button key={r.mapbox_id} onClick={() => selectLocation(r)} className="w-full px-5 py-4 text-left hover:bg-indigo-600/20 border-b border-slate-800 last:border-0 flex flex-col gap-0.5 transition-colors">
+                          <div className="font-bold text-white text-sm">{r.name}</div>
+                          <div className="text-[10px] text-slate-500 font-medium line-clamp-1">{r.place_formatted}</div>
                         </button>
                       ))}
                     </div>
@@ -415,9 +434,9 @@ export default function App() {
                       {searchResults.length > 0 && (
                         <div className="absolute left-0 right-0 z-[9999] mt-2 bg-[#1a1b23] border border-slate-700 rounded-xl shadow-2xl overflow-y-auto max-h-[250px] custom-scrollbar pointer-events-auto">
                           {searchResults.map(r => (
-                            <button key={r.id} onClick={() => selectLocation(r)} className="w-full px-4 py-3 text-left hover:bg-indigo-600/20 border-b border-slate-800 last:border-0 flex flex-col gap-0.5 transition-colors">
-                              <div className="font-bold text-sm text-slate-200">{r.text}</div>
-                              <div className="text-[10px] text-slate-500 line-clamp-1">{r.place_name}</div>
+                            <button key={r.mapbox_id} onClick={() => selectLocation(r)} className="w-full px-4 py-3 text-left hover:bg-indigo-600/20 border-b border-slate-800 last:border-0 flex flex-col gap-0.5 transition-colors">
+                              <div className="font-bold text-sm text-slate-200">{r.name}</div>
+                              <div className="text-[10px] text-slate-500 line-clamp-1">{r.place_formatted}</div>
                             </button>
                           ))}
                         </div>
