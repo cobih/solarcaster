@@ -67,6 +67,7 @@ export const useFirestoreSync = (user, appId) => {
   } : {});
 
   const [snapshots, setSnapshots] = useState({});
+  const [sigenergy, setSigenergy] = useState(null);
 
   // --- 1. SYSTEM DISCOVERY & MIGRATION ---
   useEffect(() => {
@@ -115,7 +116,6 @@ export const useFirestoreSync = (user, appId) => {
         }
       } catch (err) {
         console.error("System Discovery/Migration Error:", err);
-        // Fallback to a default system if something goes wrong
         setSystems([{ id: 'default', locationName: "My Home" }]);
       }
     });
@@ -156,7 +156,6 @@ export const useFirestoreSync = (user, appId) => {
         }
         setConfig(migrated);
       } else {
-        // Reset to default if config doesn't exist yet (new property flow)
         setConfig({
           lat: null, long: null, eff: 0.85, schemaVersion: 2,
           locationSet: false, arraysSet: false, locationName: "",
@@ -193,10 +192,21 @@ export const useFirestoreSync = (user, appId) => {
       }
     }, (err) => console.error("Snapshots Sync Error:", err));
 
+    // Sigenergy Integration Listener
+    const sigenRef = doc(db, 'users', user.uid, 'integrations', 'sigenergy');
+    const unsubSigen = onSnapshot(sigenRef, (snap) => {
+      if (snap.exists()) {
+        setSigenergy(snap.data());
+      } else {
+        setSigenergy(null);
+      }
+    });
+
     return () => { 
       unsubConfig(); 
       unsubActuals();
       unsubSnapshots();
+      unsubSigen();
       clearTimeout(timeoutId);
     };
   }, [user, appId, isDemo, currentSystemId]);
@@ -217,13 +227,10 @@ export const useFirestoreSync = (user, appId) => {
     try {
       const configRef = doc(db, 'artifacts', appId, 'users', user.uid, 'systems', currentSystemId, 'solar_app', 'config');
       await setDoc(configRef, cleanConfig, { merge: true });
-      
-      // Update system metadata if locationName changed
       if (newConfig.locationName && newConfig.locationName !== config.locationName) {
         const systemRef = doc(db, 'artifacts', appId, 'users', user.uid, 'systems', currentSystemId);
         await setDoc(systemRef, { locationName: newConfig.locationName }, { merge: true });
       }
-      
       setDbStatus("Saved");
       setLastSynced(new Date().toLocaleTimeString());
     } catch (err) {
@@ -275,23 +282,24 @@ export const useFirestoreSync = (user, appId) => {
 
   const deleteSystem = async (systemId) => {
     if (!user || isDemo || systems.length <= 1) return;
-    
     try {
       const { deleteDoc } = await import('firebase/firestore');
       const systemRef = doc(db, 'artifacts', appId, 'users', user.uid, 'systems', systemId);
       await deleteDoc(systemRef);
-      
-      // If we deleted the current system, switch to another one
       if (systemId === currentSystemId) {
         const remaining = systems.filter(s => s.id !== systemId);
-        if (remaining.length > 0) {
-          setCurrentSystemId(remaining[0].id);
-        }
+        if (remaining.length > 0) setCurrentSystemId(remaining[0].id);
       }
     } catch (err) {
       console.error("Failed to delete system:", err);
-      alert("Error deleting property. Please try again.");
     }
+  };
+
+  const disconnectSystem = async () => {
+    if (!user || isDemo) return;
+    const { deleteDoc } = await import('firebase/firestore');
+    const sigenRef = doc(db, 'users', user.uid, 'integrations', 'sigenergy');
+    await deleteDoc(sigenRef);
   };
 
   const publishForecast = async (dailyTotals, hourlyData) => {
@@ -299,44 +307,21 @@ export const useFirestoreSync = (user, appId) => {
     try {
       const publicRef = doc(db, 'public_forecasts', user.uid);
       const summary = dailyTotals.map(d => ({
-        day: d.dayLabel,
-        yield: Number(d.yield.toFixed(2)),
-        offset: d.dayOffset
+        day: d.dayLabel, yield: Number(d.yield.toFixed(2)), offset: d.dayOffset
       }));
       const hourly = (hourlyData || []).map(h => ({
-        time: h.date.toISOString(),
-        kw: h.p50,
-        p10: h.p10,
-        p50: h.p50,
-        p90: h.p90
+        time: h.date.toISOString(), kw: h.p50, p10: h.p10, p50: h.p50, p90: h.p90
       }));
       await setDoc(publicRef, { 
-        lastUpdate: new Date().toISOString(),
-        forecast: summary,
-        hourly,
-        unit: "kWh",
+        lastUpdate: new Date().toISOString(), forecast: summary, hourly, unit: "kWh",
         note: "Use p50 for most likely prediction. kw is deprecated and will be removed in v2."
       });
-    } catch (e) {
-      console.error("Public publish failed:", e);
-    }
+    } catch (e) { console.error("Public publish failed:", e); }
   };
 
   return { 
-    config, 
-    actuals, 
-    snapshots,
-    systems,
-    currentSystemId,
-    setCurrentSystemId,
-    dbSyncing, 
-    dbStatus, 
-    lastSynced, 
-    saveConfigToCloud, 
-    saveActualToCloud,
-    saveSnapshotToCloud,
-    addNewSystem,
-    deleteSystem,
-    publishForecast
+    config, actuals, snapshots, systems, sigenergy, currentSystemId, setCurrentSystemId,
+    dbSyncing, dbStatus, lastSynced, saveConfigToCloud, saveActualToCloud,
+    saveSnapshotToCloud, addNewSystem, deleteSystem, disconnectSystem, publishForecast
   };
 };

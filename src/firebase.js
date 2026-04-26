@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getAnalytics, logEvent } from 'firebase/analytics';
+import { getFunctions } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -16,6 +17,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const functions = getFunctions(app);
 const analytics = typeof window !== 'undefined' ? getAnalytics(app) : null;
 
 setPersistence(auth, browserLocalPersistence).catch(err => console.error("Persistence Error:", err));
@@ -34,4 +36,4 @@ export const clearSensitiveData = async () => {
   }
 };
 
-export { app, auth, db, analytics };
+export { app, auth, db, functions, analytics };

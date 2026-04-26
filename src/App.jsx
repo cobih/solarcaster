@@ -7,15 +7,16 @@ import {
   Sun, Calendar, Settings, AlertCircle, Info, Target, Calculator, Zap, Cloud,
   LogOut, LogIn, User, Plus, Trash2, Activity,
   MapPin, Search, Navigation, LayoutDashboard, TrendingUp, History, CloudRain,
-  Crosshair, ChevronDown, ChevronUp, MessageSquare, ArrowRight, Lock, Home
+  Crosshair, ChevronDown, ChevronUp, MessageSquare, ArrowRight, Lock, Home, Link as LinkIcon
 } from 'lucide-react';
 
 import { useSolarAuth } from './hooks/useSolarAuth';
 import { useFirestoreSync } from './hooks/useFirestoreSync';
 import { useSolarPhysics } from './hooks/useSolarPhysics';
 import { sanitizeString } from './utils/sanitize';
-import { db, logAnalyticsEvent } from './firebase';
+import { db, logAnalyticsEvent, functions } from './firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 
 const appId = "solar-forecaster-63320";
 // Split token to bypass GitHub push protection
@@ -27,7 +28,8 @@ export default function App() {
   const [isDemo, setIsDemo] = useState(false);
 
   const { 
-    config, actuals, snapshots, systems, currentSystemId, setCurrentSystemId, addNewSystem, deleteSystem,
+    config, actuals, snapshots, systems, sigenergy, currentSystemId, setCurrentSystemId, 
+    addNewSystem, deleteSystem, disconnectSystem,
     dbSyncing, dbStatus, lastSynced, 
     saveConfigToCloud, saveActualToCloud, saveSnapshotToCloud, publishForecast 
   } = useFirestoreSync(isDemo ? { uid: 'demo-user', email: 'demo@solarcaster.ai' } : user, appId);
@@ -55,6 +57,10 @@ export default function App() {
   const [locationMode, setLocationMode] = useState("gps");
   const [manualCoords, setManualCoords] = useState({ lat: 53.3767, long: -6.3286 });
   const [mapboxSession, setMapboxSession] = useState("");
+
+  const [showSigenModal, setShowSigenModal] = useState(false);
+  const [sigenForm, setSigenForm] = useState({ email: '', password: '', region: 'EU' });
+  const [sigenConnecting, setSigenConnecting] = useState(false);
 
   const [visibleSeries, setVisibleSeries] = useState({
     total: true, energy: true, strings: true, uncertainty: true
@@ -381,6 +387,24 @@ export default function App() {
       await deleteSystem(s.id);
     }
   };
+
+  const handleSigenConnect = async () => {
+    setSigenConnecting(true);
+    try {
+      const connectFn = httpsCallable(functions, 'connectSigenergy');
+      const result = await connectFn(sigenForm);
+      if (result.data.success) {
+        setShowSigenModal(false);
+        setSigenForm({ email: '', password: '', region: 'EU' });
+        logAnalyticsEvent('inverter_connect', { brand: 'sigenergy' });
+      }
+    } catch (err) {
+      alert("Failed to connect: " + err.message);
+    } finally {
+      setSigenConnecting(false);
+    }
+  };
+
   if (authLoading) return (
     <div className="flex flex-col items-center justify-center h-screen bg-solar-bg text-white gap-4 p-6 text-center">
       <MapPin className="w-12 h-12 text-indigo-500 animate-pulse" />
@@ -397,6 +421,7 @@ export default function App() {
       )}
     </div>
   );
+
   if (!user && !isDemo) return (
     <div className="flex items-center justify-center min-h-screen bg-solar-bg p-6 text-center">
       <div className="max-w-md w-full bg-solar-card p-8 rounded-2xl border border-slate-700 shadow-2xl space-y-6">
@@ -495,6 +520,67 @@ export default function App() {
               {isDemo ? "📍 Demo System" : (config.locationName || "My Home")}
               <ChevronDown className={`w-3 h-3 transition-transform ${showSwitcher ? 'rotate-180' : ''}`} />
             </button>
+
+            {showSwitcher && (
+              <div className="absolute top-full left-0 mt-2 w-64 bg-solar-card border border-slate-700 rounded-xl shadow-2xl z-[70] animate-in fade-in slide-in-from-top-2 overflow-hidden">
+                <div className="p-3 border-b border-slate-800 bg-solar-bg">
+                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">My Properties</p>
+                </div>
+                <div className="max-h-64 overflow-y-auto custom-scrollbar relative">
+                  <div className={`transition-all duration-500 ${isDemo ? 'blur-md select-none pointer-events-none' : ''}`}>
+                    {systems.map(s => (
+                      <div 
+                        key={s.id} 
+                        className={`w-full flex items-stretch transition-colors border-b border-slate-800/50 last:border-0 ${currentSystemId === s.id ? 'bg-indigo-600/5 border-l-2 border-l-indigo-500' : ''}`}
+                      >
+                        <button
+                          onClick={() => { setCurrentSystemId(s.id); setShowSwitcher(false); }}
+                          className="flex-1 p-4 flex items-center gap-3 text-left hover:bg-indigo-600/10 transition-colors"
+                        >
+                          <Home className={`w-4 h-4 ${currentSystemId === s.id ? 'text-indigo-400' : 'text-slate-600'}`} />
+                          <div className="min-w-0 flex-1">
+                            <p className={`text-sm font-bold truncate ${currentSystemId === s.id ? 'text-white' : 'text-slate-400'}`}>{s.locationName}</p>
+                            {s.id === 'demo' && <p className="text-[8px] text-amber-500 font-bold uppercase">Guest Mode</p>}
+                          </div>
+                          {currentSystemId === s.id && <Activity className="w-3 h-3 text-indigo-500 animate-pulse" />}
+                        </button>
+                        {!isDemo && systems.length > 1 && (
+                          <button 
+                            onClick={(e) => handleDeleteSystem(e, s)}
+                            className="px-4 flex items-center justify-center text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                            title="Delete Property"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {isDemo && (
+                    <div 
+                      onClick={() => setIsDemo(false)}
+                      className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-solar-bg/40 backdrop-blur-[2px] cursor-pointer group"
+                    >
+                      <Lock className="w-5 h-5 text-indigo-400 group-hover:scale-110 transition-transform" />
+                      <div className="text-center">
+                        <p className="text-[10px] font-black text-white uppercase tracking-widest">Portfolio Manager</p>
+                        <p className="text-[9px] text-slate-400 leading-tight">Sign in to manage<br/>multiple properties</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {!isDemo && (
+                  <button 
+                    onClick={handleAddSystem}
+                    className="w-full p-4 text-left hover:bg-emerald-600/10 flex items-center gap-3 text-emerald-400 transition-colors border-t border-slate-800 bg-solar-bg"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span className="text-xs font-black uppercase tracking-widest">Add New Property</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2 md:gap-3">
             <button onClick={() => isDemo ? setIsDemo(false) : setShowConfig(!showConfig)} className={`relative p-2 md:px-4 md:py-2 bg-solar-card border ${canApply && !isDemo ? 'border-amber-500 text-amber-400' : 'border-slate-700 text-slate-300'} rounded-lg flex items-center gap-2 shadow-sm transition-all hover:bg-slate-800`}>{isDemo ? <Lock className="w-4 h-4" /> : (canApply ? <Activity className="w-4 h-4 animate-pulse" /> : <Settings className="w-4 h-4" />)}<span className="hidden md:inline">{isDemo ? "Sign In" : "Settings"}</span>{canApply && !isDemo && <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full border-2 border-solar-bg"></span>}</button>
@@ -505,67 +591,6 @@ export default function App() {
             </div>
           </div>
         </div>
-
-        {showSwitcher && (
-          <div className="bg-solar-card border border-slate-700 rounded-2xl shadow-xl animate-in fade-in slide-in-from-top-2 overflow-hidden w-full md:w-96 relative">
-            <div className={`transition-all duration-500 ${isDemo ? 'blur-md select-none pointer-events-none' : ''}`}>
-              <div className="p-3 border-b border-slate-800 bg-solar-bg">
-                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">My Properties</p>
-              </div>
-              <div className="max-h-64 overflow-y-auto custom-scrollbar">
-                {systems.map(s => (
-                  <div 
-                    key={s.id} 
-                    className={`w-full flex items-stretch transition-colors border-b border-slate-800/50 last:border-0 ${currentSystemId === s.id ? 'bg-indigo-600/5 border-l-2 border-l-indigo-500' : ''}`}
-                  >
-                    <button
-                      onClick={() => { setCurrentSystemId(s.id); setShowSwitcher(false); }}
-                      className="flex-1 p-4 flex items-center gap-3 text-left hover:bg-indigo-600/10 transition-colors"
-                    >
-                      <Home className={`w-4 h-4 ${currentSystemId === s.id ? 'text-indigo-400' : 'text-slate-600'}`} />
-                      <div className="min-w-0 flex-1">
-                        <p className={`text-sm font-bold truncate ${currentSystemId === s.id ? 'text-white' : 'text-slate-400'}`}>{s.locationName}</p>
-                        {s.id === 'demo' && <p className="text-[8px] text-amber-500 font-bold uppercase">Guest Mode</p>}
-                      </div>
-                      {currentSystemId === s.id && <Activity className="w-3 h-3 text-indigo-500 animate-pulse" />}
-                    </button>
-                    {!isDemo && systems.length > 1 && (
-                      <button 
-                        onClick={(e) => handleDeleteSystem(e, s)}
-                        className="px-4 flex items-center justify-center text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                        title="Delete Property"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-              {!isDemo && (
-                <button 
-                  onClick={handleAddSystem}
-                  className="w-full p-4 text-left hover:bg-emerald-600/10 flex items-center gap-3 text-emerald-400 transition-colors border-t border-slate-800 bg-solar-bg"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span className="text-xs font-black uppercase tracking-widest">Add New Property</span>
-                </button>
-              )}
-            </div>
-
-            {isDemo && (
-              <div 
-                onClick={() => setIsDemo(false)}
-                className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-solar-bg/40 backdrop-blur-[2px] cursor-pointer group"
-              >
-                <Lock className="w-5 h-5 text-indigo-400 group-hover:scale-110 transition-transform" />
-                <div className="text-center">
-                  <p className="text-[10px] font-black text-white uppercase tracking-widest">Portfolio Manager</p>
-                  <p className="text-[9px] text-slate-400 leading-tight">Sign in to manage<br/>multiple properties</p>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
         <div className="hidden md:flex items-center gap-1 p-1 bg-solar-card rounded-xl border border-slate-800 w-fit">
           {['today', 'forecast', 'history'].map(tab => (<button key={tab} onClick={() => setActiveTab(tab)} className={`px-6 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === tab ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</button>))}
@@ -611,7 +636,61 @@ export default function App() {
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-800 pb-4 gap-4"><h3 className="font-semibold text-white text-sm flex items-center gap-2"><Calculator className="w-4 h-4 text-amber-400" /> String Setup</h3><button onClick={addString} className="px-3 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 active:scale-95 shadow-sm transition-all"><Plus className="w-3 h-3" /> Add String</button></div>
                 <div className="bg-solar-bg p-3 rounded-xl border border-slate-800 flex items-center gap-4"><label className="text-[9px] font-black text-slate-500 uppercase shrink-0">Efficiency</label><input type="range" min="10" max="100" value={config.eff * 100} onChange={e => saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 })} className="flex-1 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500" /><div className="flex items-center gap-1 min-w-[45px]"><input type="number" value={Math.round(config.eff * 100)} onChange={e => saveConfigToCloud({ ...config, eff: Number(e.target.value) / 100 })} className="w-8 bg-transparent text-indigo-400 text-xs font-bold font-mono outline-none" /><span className="text-[10px] text-slate-600">%</span></div></div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{(config.strings || []).map(s => (<div key={s.id} className="p-4 bg-solar-bg rounded-2xl border border-slate-700 relative group"><div className="flex justify-between items-center mb-3"><input type="text" value={s.name} onChange={e => updateString(s.id, 'name', e.target.value)} className="bg-transparent border-b border-slate-800 text-white font-bold text-sm py-1 outline-none focus:border-indigo-500" /><button onClick={() => removeString(s.id)} className="p-2 text-red-500 hover:bg-red-900/10 rounded-lg transition-colors"><Trash2 className="w-3 h-3" /></button></div><div className="grid grid-cols-2 gap-3"><div><label className="text-[9px] font-bold text-slate-500 uppercase mb-1">Panels</label><input type="number" value={s.count} onChange={e => updateString(s.id, 'count', Number(e.target.value))} className="w-full bg-solar-card border border-slate-700 rounded-lg p-1.5 text-sm text-white focus:border-indigo-500 outline-none" /></div><div><label className="text-[9px] font-bold text-slate-500 uppercase mb-1">Wattage</label><input type="number" value={s.wattage || 465} onChange={e => updateString(s.id, 'wattage', Number(e.target.value))} className="w-full bg-solar-card border border-slate-700 rounded-lg p-1.5 text-sm text-white focus:border-indigo-500 outline-none" /></div><div><label className="text-[9px] font-bold text-slate-500 uppercase mb-1">Azimuth</label><input type="number" value={s.azimuth} onChange={e => updateString(s.id, 'azimuth', Number(e.target.value))} className="w-full bg-solar-card border border-slate-700 rounded-lg p-1.5 text-sm text-white focus:border-indigo-500 outline-none" /></div><div><label className="text-[9px] font-bold text-slate-500 uppercase mb-1">Pitch</label><input type="number" value={s.tilt} onChange={e => updateString(s.id, 'tilt', Number(e.target.value))} className="w-full bg-solar-card border border-slate-700 rounded-lg p-1.5 text-sm text-white focus:border-indigo-500 outline-none" /></div></div></div>))}</div>
-                <div className="grid grid-cols-1 gap-4 mt-4"><div><label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Battery Usable (kWh)</label><input type="number" value={config.batteryCapacity} onChange={e => saveConfigToCloud({ ...config, batteryCapacity: Number(e.target.value) })} className="w-full bg-solar-card border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none" /></div></div>
+                
+                {/* NEW: INVERTER CONNECTION SECTION */}
+                <div className="pt-6 border-t border-slate-800 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-white text-sm flex items-center gap-2"><LinkIcon className="w-4 h-4 text-solar-emerald" /> Inverter Connection</h3>
+                  </div>
+                  
+                  {sigenergy?.status === 'connected' ? (
+                    <div className="bg-solar-emerald/5 border border-solar-emerald/20 p-4 rounded-2xl space-y-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="flex items-center gap-2 text-solar-emerald font-bold text-xs uppercase tracking-widest">
+                            <Activity className="w-3 h-3 animate-pulse" /> Sigenergy Connected
+                          </div>
+                          <p className="text-[10px] text-slate-500 mt-1">System ID: {sigenergy.stationId}</p>
+                        </div>
+                        <button 
+                          onClick={disconnectSystem}
+                          className="px-3 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all"
+                        >
+                          Disconnect
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 pt-2 border-t border-solar-emerald/10">
+                        <div>
+                          <p className="text-[8px] text-slate-600 uppercase font-black">PV Capacity</p>
+                          <p className="text-xs font-bold text-slate-300">{totalCapacity.toFixed(2)} kWp</p>
+                        </div>
+                        <div>
+                          <p className="text-[8px] text-slate-600 uppercase font-black">Battery</p>
+                          <p className="text-xs font-bold text-slate-300">{config.batteryCapacity} kWh</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-[11px] text-slate-500 leading-tight">Automatically sync your daily actuals and unlock real consumption data.</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button 
+                          onClick={() => setShowSigenModal(true)}
+                          className="p-3 bg-solar-card border border-slate-700 hover:border-solar-indigo rounded-xl flex flex-col items-center gap-2 group transition-all"
+                        >
+                          <Zap className="w-5 h-5 text-solar-indigo group-hover:scale-110 transition-transform" />
+                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">Sigenergy</span>
+                        </button>
+                        <button disabled className="p-3 bg-solar-card border border-slate-800 opacity-40 cursor-not-allowed flex flex-col items-center gap-2 grayscale">
+                          <Activity className="w-5 h-5 text-slate-500" />
+                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">SolarEdge</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 mt-4"><div><label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Battery Usable (kWh)</label><input type="number" disabled={sigenergy?.status === 'connected'} value={config.batteryCapacity} onChange={e => saveConfigToCloud({ ...config, batteryCapacity: Number(e.target.value) })} className="w-full bg-solar-card border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none disabled:opacity-50" /></div></div>
               </div>
             ) : (
               <div className="space-y-6 animate-in slide-in-from-right-2">
@@ -622,6 +701,64 @@ export default function App() {
               </div>
             )}
             <div className="pt-4 border-t border-slate-800 flex justify-between items-center text-[10px] text-slate-500 font-bold uppercase px-2"><p>Capacity: {totalCapacity.toFixed(2)} kWp</p><button onClick={handleLogout} className="text-red-400 hover:underline">Log Out</button></div>
+          </div>
+        )}
+
+        {showSigenModal && (
+          <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-4 bg-solar-bg/80 backdrop-blur-sm animate-in fade-in">
+            <div className="w-full max-w-md bg-solar-card rounded-2xl border border-slate-700 shadow-2xl p-6 space-y-6 animate-in slide-in-from-bottom-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2"><Zap className="w-5 h-5 text-solar-indigo" /> Connect Sigenergy</h3>
+                <button onClick={() => setShowSigenModal(false)} className="text-slate-500 text-xl hover:text-white transition-colors">&times;</button>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed">Enter your mySigen app credentials. Solarcaster will sync your daily generation automatically — you'll never need to enter actuals manually again.</p>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Email</label>
+                  <input 
+                    type="email" 
+                    value={sigenForm.email} 
+                    onChange={e => setSigenForm({...sigenForm, email: e.target.value})}
+                    className="w-full p-3 bg-solar-bg border border-slate-700 rounded-xl text-white outline-none focus:border-solar-indigo transition-all" 
+                    placeholder="mySigen login email"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Password</label>
+                  <input 
+                    type="password" 
+                    value={sigenForm.password} 
+                    onChange={e => setSigenForm({...sigenForm, password: e.target.value})}
+                    className="w-full p-3 bg-solar-bg border border-slate-700 rounded-xl text-white outline-none focus:border-solar-indigo transition-all" 
+                    placeholder="mySigen app password"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Region</label>
+                  <select 
+                    value={sigenForm.region} 
+                    onChange={e => setSigenForm({...sigenForm, region: e.target.value})}
+                    className="w-full p-3 bg-solar-bg border border-slate-700 rounded-xl text-white outline-none focus:border-solar-indigo transition-all"
+                  >
+                    <option value="EU">Europe (EU)</option>
+                    <option value="GLOBAL">Global / Australia</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button onClick={() => setShowSigenModal(false)} className="flex-1 py-3 bg-solar-bg border border-slate-700 hover:bg-slate-800 text-slate-300 rounded-xl font-bold transition-all text-sm">Cancel</button>
+                <button 
+                  onClick={handleSigenConnect} 
+                  disabled={sigenConnecting || !sigenForm.email || !sigenForm.password}
+                  className="flex-[2] py-3 bg-solar-indigo hover:bg-indigo-600 disabled:opacity-50 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-500/20 text-sm flex items-center justify-center gap-2"
+                >
+                  {sigenConnecting ? <Activity className="w-4 h-4 animate-spin" /> : <LinkIcon className="w-4 h-4" />}
+                  {sigenConnecting ? "Connecting..." : "Connect Inverter"}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -642,18 +779,27 @@ export default function App() {
                     {needsEntry && !isDemo && <div className="w-2 h-2 bg-amber-500 rounded-full ml-auto animate-ping"></div>}
                   </label>
                   <div className="mt-2 flex items-center gap-2">
-                    <input 
-                      type="number" 
-                      value={actuals[todayForecast.isoDate] || ''} 
-                      disabled={isDemo}
-                      onChange={e => { saveActualToCloud(todayForecast.isoDate, e.target.value); setIsCalculating(true); setTimeout(() => setIsCalculating(false), 1500); }} 
-                      className="w-full bg-transparent border-b-2 border-indigo-500 p-1 text-3xl font-bold text-white outline-none focus:border-indigo-400 transition-colors disabled:border-slate-700" 
-                      placeholder={isDemo ? "Sign in to enter readings" : (needsEntry ? "Enter final kWh..." : "0.0")} 
-                    />
-                    <span className="text-slate-500 font-medium text-xs">kWh</span>
+                    {sigenergy?.status === 'connected' ? (
+                       <div className="flex flex-col">
+                         <div className="text-3xl font-bold text-white">{actuals[todayForecast.isoDate] || '0.0'}</div>
+                         <div className="flex items-center gap-1.5 mt-1 text-[8px] font-black text-solar-emerald uppercase tracking-widest bg-solar-emerald/10 px-2 py-0.5 rounded-full w-fit border border-solar-emerald/20">
+                           <Cloud className="w-2.5 h-2.5" /> Synced from Sigenergy
+                         </div>
+                       </div>
+                    ) : (
+                      <input 
+                        type="number" 
+                        value={actuals[todayForecast.isoDate] || ''} 
+                        disabled={isDemo}
+                        onChange={e => { saveActualToCloud(todayForecast.isoDate, e.target.value); setIsCalculating(true); setTimeout(() => setIsCalculating(false), 1500); }} 
+                        className="w-full bg-transparent border-b-2 border-indigo-500 p-1 text-3xl font-bold text-white outline-none focus:border-indigo-400 transition-colors disabled:border-slate-700" 
+                        placeholder={isDemo ? "Sign in to enter readings" : (needsEntry ? "Enter final kWh..." : "0.0")} 
+                      />
+                    )}
+                    <span className="text-slate-500 font-medium text-xs ml-auto">kWh</span>
                   </div>
                 </div>
-                <p className="mt-4 text-[10px] text-slate-500 italic leading-tight">{isDemo ? "Sign in to log actuals and tune your model." : "Syncs to cloud for model tuning."}</p>
+                <p className="mt-4 text-[10px] text-slate-500 italic leading-tight">{isDemo ? "Sign in to log actuals and tune your model." : (sigenergy?.status === 'connected' ? "Daily actuals sync automatically at 23:00." : "Syncs to cloud for model tuning.")}</p>
               </div>
 
               <div className={`p-5 rounded-xl border shadow-sm flex flex-col justify-between transition-all duration-700 relative overflow-hidden ${isCalculating ? 'scale-[1.05] shadow-[0_0_20px_rgba(16,185,129,0.3)] border-emerald-500/50 bg-emerald-900/10' : (daysEntered > 0 ? (isAccurate ? 'bg-emerald-900/10 border-emerald-500/20' : 'bg-amber-900/10 border-amber-500/20') : 'bg-solar-card border-slate-700/50')}`}>
