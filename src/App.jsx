@@ -177,20 +177,38 @@ export default function App() {
 
   const searchAddress = async (q) => {
     setAddressQuery(q);
-    if (q.length < 2) { setSearchResults([]); return; }
+    if (!q || q.length < 2) { 
+      setSearchResults([]); 
+      if (searchTimeout) clearTimeout(searchTimeout);
+      setSearchLoading(false);
+      return; 
+    }
 
+    setSearchLoading(true); // Set loading immediately
     if (searchTimeout) clearTimeout(searchTimeout);
+
     searchTimeout = setTimeout(async () => {
-      setSearchLoading(true);
       try {
         const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN || MBT;
+        console.log(`Searching Mapbox for: "${q}"...`);
         const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?access_token=${mapboxToken}&limit=5&proximity=ip&types=place,postcode,address`);
         const data = await res.json();
-        setSearchResults(data.features || []);
-      } catch (err) { console.error(err); } finally { setSearchLoading(false); }
-    }, 300);
-  };
-  const detectLocation = () => {
+
+        if (data.features) {
+          console.log(`Found ${data.features.length} results.`);
+          setSearchResults(data.features);
+        } else {
+          console.error("Mapbox API Error:", data);
+          setSearchResults([]);
+        }
+      } catch (err) { 
+        console.error("Fetch Error:", err); 
+        setSearchResults([]);
+      } finally { 
+        setSearchLoading(false); 
+      }
+    }, 400);
+  };  const detectLocation = () => {
     if (!navigator.geolocation) return alert("No GPS");
     setSearchLoading(true);
     navigator.geolocation.getCurrentPosition(async (pos) => {
@@ -312,10 +330,11 @@ export default function App() {
                     value={addressQuery} 
                     onChange={(e) => searchAddress(e.target.value)} 
                     placeholder="Search address, postal code..." 
-                    className="w-full pl-12 pr-4 py-4 bg-[#1a1b23] border border-slate-600 rounded-2xl text-white focus:border-indigo-500 outline-none transition-all" 
+                    className="w-full pl-12 pr-12 py-4 bg-[#1a1b23] border border-slate-600 rounded-2xl text-white focus:border-indigo-500 outline-none transition-all" 
                   />
+                  {searchLoading && <Activity className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-indigo-500 animate-spin" />}
                   {searchResults.length > 0 && (
-                    <div className="absolute left-0 right-0 z-[1000] mt-2 bg-[#1a1b23] border border-slate-700 rounded-2xl overflow-y-auto max-h-[250px] shadow-[0_20px_50px_rgba(0,0,0,0.5)] custom-scrollbar">
+                    <div className="absolute left-0 right-0 z-[9999] mt-2 bg-[#1a1b23] border border-slate-700 rounded-2xl overflow-y-auto max-h-[250px] shadow-[0_20px_50px_rgba(0,0,0,0.5)] custom-scrollbar pointer-events-auto">
                       {searchResults.map(r => (
                         <button key={r.id} onClick={() => selectLocation(r)} className="w-full px-5 py-4 text-left hover:bg-indigo-600/20 border-b border-slate-800 last:border-0 flex flex-col gap-0.5 transition-colors">
                           <div className="font-bold text-white text-sm">{r.text}</div>
@@ -390,9 +409,11 @@ export default function App() {
                         value={addressQuery} 
                         onChange={e => searchAddress(e.target.value)} 
                         placeholder="Postal code or city..." 
-                        className="w-full pl-10 pr-4 py-2.5 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white focus:border-indigo-500 outline-none transition-all" 
-                      />                      {searchResults.length > 0 && (
-                        <div className="absolute left-0 right-0 z-[1000] mt-2 bg-[#1a1b23] border border-slate-700 rounded-xl shadow-2xl overflow-y-auto max-h-[250px] custom-scrollbar">
+                        className="w-full pl-10 pr-10 py-2.5 bg-[#1a1b23] border border-slate-600 rounded-lg text-sm text-white focus:border-indigo-500 outline-none transition-all" 
+                      />
+                      {searchLoading && <Activity className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-500 animate-spin" />}
+                      {searchResults.length > 0 && (
+                        <div className="absolute left-0 right-0 z-[9999] mt-2 bg-[#1a1b23] border border-slate-700 rounded-xl shadow-2xl overflow-y-auto max-h-[250px] custom-scrollbar pointer-events-auto">
                           {searchResults.map(r => (
                             <button key={r.id} onClick={() => selectLocation(r)} className="w-full px-4 py-3 text-left hover:bg-indigo-600/20 border-b border-slate-800 last:border-0 flex flex-col gap-0.5 transition-colors">
                               <div className="font-bold text-sm text-slate-200">{r.text}</div>
