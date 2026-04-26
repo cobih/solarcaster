@@ -273,6 +273,27 @@ export const useFirestoreSync = (user, appId) => {
     return newId;
   };
 
+  const deleteSystem = async (systemId) => {
+    if (!user || isDemo || systems.length <= 1) return;
+    
+    try {
+      const { deleteDoc } = await import('firebase/firestore');
+      const systemRef = doc(db, 'artifacts', appId, 'users', user.uid, 'systems', systemId);
+      await deleteDoc(systemRef);
+      
+      // If we deleted the current system, switch to another one
+      if (systemId === currentSystemId) {
+        const remaining = systems.filter(s => s.id !== systemId);
+        if (remaining.length > 0) {
+          setCurrentSystemId(remaining[0].id);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to delete system:", err);
+      alert("Error deleting property. Please try again.");
+    }
+  };
+
   const publishForecast = async (dailyTotals, hourlyData) => {
     if (!user || !config.apiEnabled || isDemo) return;
     try {
@@ -315,6 +336,7 @@ export const useFirestoreSync = (user, appId) => {
     saveActualToCloud,
     saveSnapshotToCloud,
     addNewSystem,
+    deleteSystem,
     publishForecast
   };
 };

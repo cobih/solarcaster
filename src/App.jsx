@@ -27,7 +27,7 @@ export default function App() {
   const [isDemo, setIsDemo] = useState(false);
 
   const { 
-    config, actuals, snapshots, systems, currentSystemId, setCurrentSystemId, addNewSystem,
+    config, actuals, snapshots, systems, currentSystemId, setCurrentSystemId, addNewSystem, deleteSystem,
     dbSyncing, dbStatus, lastSynced, 
     saveConfigToCloud, saveActualToCloud, saveSnapshotToCloud, publishForecast 
   } = useFirestoreSync(isDemo ? { uid: 'demo-user', email: 'demo@solarcaster.ai' } : user, appId);
@@ -375,6 +375,12 @@ export default function App() {
     }
   };
 
+  const handleDeleteSystem = async (e, s) => {
+    e.stopPropagation(); // Don't switch to the system we're deleting
+    if (window.confirm(`Are you sure you want to delete "${s.locationName}"? All data for this property will be removed.`)) {
+      await deleteSystem(s.id);
+    }
+  };
   if (authLoading) return (
     <div className="flex flex-col items-center justify-center h-screen bg-solar-bg text-white gap-4 p-6 text-center">
       <MapPin className="w-12 h-12 text-indigo-500 animate-pulse" />
@@ -508,18 +514,31 @@ export default function App() {
               </div>
               <div className="max-h-64 overflow-y-auto custom-scrollbar">
                 {systems.map(s => (
-                  <button 
+                  <div 
                     key={s.id} 
-                    onClick={() => { setCurrentSystemId(s.id); setShowSwitcher(false); }}
-                    className={`w-full p-4 text-left hover:bg-indigo-600/10 flex items-center gap-3 transition-colors border-b border-slate-800/50 last:border-0 ${currentSystemId === s.id ? 'bg-indigo-600/5 border-l-2 border-l-indigo-500' : ''}`}
+                    className={`w-full flex items-stretch transition-colors border-b border-slate-800/50 last:border-0 ${currentSystemId === s.id ? 'bg-indigo-600/5 border-l-2 border-l-indigo-500' : ''}`}
                   >
-                    <Home className={`w-4 h-4 ${currentSystemId === s.id ? 'text-indigo-400' : 'text-slate-600'}`} />
-                    <div className="min-w-0 flex-1">
-                      <p className={`text-sm font-bold truncate ${currentSystemId === s.id ? 'text-white' : 'text-slate-400'}`}>{s.locationName}</p>
-                      {s.id === 'demo' && <p className="text-[8px] text-amber-500 font-bold uppercase">Guest Mode</p>}
-                    </div>
-                    {currentSystemId === s.id && <Activity className="w-3 h-3 text-indigo-500 animate-pulse" />}
-                  </button>
+                    <button
+                      onClick={() => { setCurrentSystemId(s.id); setShowSwitcher(false); }}
+                      className="flex-1 p-4 flex items-center gap-3 text-left hover:bg-indigo-600/10 transition-colors"
+                    >
+                      <Home className={`w-4 h-4 ${currentSystemId === s.id ? 'text-indigo-400' : 'text-slate-600'}`} />
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-sm font-bold truncate ${currentSystemId === s.id ? 'text-white' : 'text-slate-400'}`}>{s.locationName}</p>
+                        {s.id === 'demo' && <p className="text-[8px] text-amber-500 font-bold uppercase">Guest Mode</p>}
+                      </div>
+                      {currentSystemId === s.id && <Activity className="w-3 h-3 text-indigo-500 animate-pulse" />}
+                    </button>
+                    {!isDemo && systems.length > 1 && (
+                      <button 
+                        onClick={(e) => handleDeleteSystem(e, s)}
+                        className="px-4 flex items-center justify-center text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                        title="Delete Property"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
               {!isDemo && (
